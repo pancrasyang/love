@@ -287,6 +287,54 @@
       line-height: 1.8;
     }
 
+    .counter-wrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .counter {
+      padding: 32px;
+      text-align: center;
+    }
+
+    .number {
+      font-size: clamp(46px, 8vw, 74px);
+      font-weight: 1000;
+      color: var(--rose);
+      letter-spacing: -0.05em;
+    }
+
+    .counter p {
+      color: var(--muted);
+      line-height: 1.8;
+      margin: 6px 0 0;
+    }
+
+    .playlist {
+      padding: 32px;
+    }
+
+    .music-desc {
+      margin: -4px 0 16px;
+      color: var(--muted);
+      line-height: 1.8;
+      font-size: 15px;
+    }
+
+    .music-card {
+      overflow: hidden;
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid rgba(255, 122, 162, 0.18);
+      box-shadow: 0 12px 30px rgba(255, 79, 134, 0.1);
+    }
+
+    .music-card iframe {
+      display: block;
+      border-radius: 24px;
+    }
+
     .checkin-layout {
       display: grid;
       grid-template-columns: 0.92fr 1.08fr;
@@ -406,8 +454,6 @@
       padding-right: 8px;
       overscroll-behavior: contain;
       scroll-behavior: smooth;
-
-      /* 关键修复：记录列表改为纵向 flex，每条记录不压缩 */
       display: flex;
       flex-direction: column;
       gap: 16px;
@@ -428,11 +474,8 @@
       border-radius: 999px;
     }
 
-    .scroll-list::-webkit-scrollbar-thumb:hover {
-      background: rgba(255, 79, 134, 0.68);
-    }
-
-    .empty {
+    .empty,
+    .loading {
       padding: 30px;
       text-align: center;
       color: var(--muted);
@@ -443,14 +486,26 @@
       flex: 0 0 auto;
     }
 
+    .status {
+      display: none;
+      padding: 12px 14px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.66);
+      border: 1px solid rgba(255, 122, 162, 0.18);
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .status.show {
+      display: block;
+    }
+
     .check-card {
       overflow: hidden;
       border-radius: 28px;
       background: rgba(255, 255, 255, 0.78);
       border: 1px solid rgba(255, 255, 255, 0.78);
       box-shadow: 0 16px 42px rgba(255, 79, 134, 0.12);
-
-      /* 关键修复：每条记录保持原尺寸，不会因为记录变多而缩小 */
       flex: 0 0 auto;
       width: 100%;
     }
@@ -602,65 +657,6 @@
       line-height: 1.75;
     }
 
-    .counter-wrap {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 18px;
-    }
-
-    .counter {
-      padding: 32px;
-      text-align: center;
-    }
-
-    .number {
-      font-size: clamp(46px, 8vw, 74px);
-      font-weight: 1000;
-      color: var(--rose);
-      letter-spacing: -0.05em;
-    }
-
-    .counter p {
-      color: var(--muted);
-      line-height: 1.8;
-      margin: 6px 0 0;
-    }
-
-    .playlist {
-      padding: 32px;
-    }
-	.music-desc {
-      margin: -4px 0 16px;
-      color: var(--muted);
-      line-height: 1.8;
-      font-size: 15px;
-    }
-
-    .music-card {
-      overflow: hidden;
-      border-radius: 24px;
-      background: rgba(255, 255, 255, 0.62);
-      border: 1px solid rgba(255, 122, 162, 0.18);
-      box-shadow: 0 12px 30px rgba(255, 79, 134, 0.1);
-    }
-
-    .music-card iframe {
-      display: block;
-      border-radius: 24px;
-    }
-    .song {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 16px 0;
-      border-bottom: 1px solid rgba(255, 122, 162, 0.16);
-      color: var(--muted);
-    }
-
-    .song strong {
-      color: var(--text);
-    }
-
     .footer {
       margin-top: 46px;
       text-align: center;
@@ -757,10 +753,6 @@
       .timeline-item:not(:last-child)::after {
         left: 36px;
       }
-
-      .song {
-        flex-direction: column;
-      }
     }
   </style>
 </head>
@@ -769,7 +761,6 @@
   <div class="floating-hearts" id="hearts"></div>
 
   <main class="page">
-
     <section class="hero">
       <div class="hero-copy glass">
         <div class="badge">💗 Love Diary · 恋爱日常</div>
@@ -796,15 +787,8 @@
     <section class="counter-wrap">
       <div class="counter glass">
         <div class="number" id="daysTogether">0</div>
-        <p>天，假装从我们在一起那天开始数。</p>
+        <p>天，假装从我们在一起那天开始数。。</p>
       </div>
-
-<div class="playlist glass">
-  <h2 class="section-title">今日恋爱歌单</h2>
-
-  <p class="music-desc">
-    今日份甜蜜 BGM，一起听喜欢的歌。
-  </p>
 
   <div class="music-card">
     <iframe
@@ -849,7 +833,7 @@
     <section id="photoCheckin">
       <h2 class="section-title">📍 打卡照片</h2>
       <p class="section-intro">
-        上传约会照片，填写打卡点和日期，也可以一键获取当前位置并显示地图。数据会保存在当前浏览器里。
+        上传约会照片，填写打卡点和日期，也可以一键获取当前位置并显示地图。记录会在线保存到 Supabase。
       </p>
 
       <div class="checkin-layout">
@@ -868,7 +852,7 @@
             <label>
               打卡照片
               <input id="spotPhoto" type="file" accept="image/*" />
-              <span class="hint">建议上传压缩后的照片；纯前端 localStorage 空间有限。</span>
+              <span class="hint">图片会上传到 Supabase Storage 的 love-photos bucket。</span>
             </label>
 
             <img id="spotPreview" class="preview" alt="打卡照片预览" />
@@ -883,8 +867,10 @@
               <div id="mapPreview" class="map-preview"></div>
             </div>
 
+            <div id="spotStatus" class="status"></div>
+
             <div class="form-actions">
-              <button type="submit" class="primary">保存打卡照片</button>
+              <button id="spotSubmitBtn" type="submit" class="primary">在线保存打卡照片</button>
               <button type="button" class="ghost" onclick="resetSpotForm()">清空表单</button>
             </div>
           </form>
@@ -900,7 +886,7 @@
     <section id="dailyCheckin">
       <h2 class="section-title">📝 日常打卡</h2>
       <p class="section-intro">
-        记录今天的一句话、一张照片，系统会自动显示发布打卡的时间。
+        记录今天的一句话、一张照片，系统会自动显示发布打卡的时间。记录会在线保存到 Supabase。
       </p>
 
       <div class="checkin-layout">
@@ -919,8 +905,10 @@
 
             <img id="dailyPreview" class="preview" alt="日常照片预览" />
 
+            <div id="dailyStatus" class="status"></div>
+
             <div class="form-actions">
-              <button type="submit" class="primary">发布日常打卡</button>
+              <button id="dailySubmitBtn" type="submit" class="primary">在线发布日常打卡</button>
               <button type="button" class="ghost" onclick="resetDailyForm()">清空表单</button>
             </div>
           </form>
@@ -967,10 +955,10 @@
       </div>
     </section>
 
-
     <p class="footer">
       Made with love · 愿我们在每个普通日子里，都能认真喜欢彼此。<br />
-      </p>
+      小提示：这一版已经支持在线保存；配置 Supabase 后，换设备也能看到同一份记录。
+    </p>
   </main>
 
   <div class="modal" id="letterModal" onclick="closeLetter(event)">
@@ -985,14 +973,25 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
   <script>
+    // ===============================
+    // 1. 需要你修改的配置
+    // ===============================
+
+    // 在 Supabase 项目中：Project Settings -> API
+    // 填 Project URL 和 anon/public key。不要填 service_role key。
+    const SUPABASE_URL = "https://oemwxlvdpowjxhipcqil.supabase.co";
+    const SUPABASE_ANON_KEY = "sb_publishable_4mho25WP3uW6UiWXLYx0ng_M_IrpsV3";
+
+    // Storage bucket 名称，需要和 supabase-schema.sql 保持一致。
+    const PHOTO_BUCKET = "love-photos";
+
     // 把这里改成你们真正的在一起日期，例如 "2024-05-20T00:00:00"
     const startDate = new Date("2025-09-14T00:00:00");
 
-    const STORAGE_KEYS = {
-      spotCheckins: "lovePageSpotCheckins",
-      dailyCheckins: "lovePageDailyCheckins"
-    };
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let currentLocation = null;
 
@@ -1001,6 +1000,10 @@
     const days = Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
     document.getElementById("daysTogether").textContent = days;
     document.getElementById("spotDate").valueAsDate = new Date();
+
+    // ===============================
+    // 2. 工具函数
+    // ===============================
 
     function uid() {
       return Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -1034,31 +1037,10 @@
       }).format(new Date(dateString + "T00:00:00"));
     }
 
-    function getStorage(key) {
-      try {
-        return JSON.parse(localStorage.getItem(key)) || [];
-      } catch (error) {
-        console.error(error);
-        return [];
-      }
-    }
-
-    function setStorage(key, value) {
-      localStorage.setItem(key, JSON.stringify(value));
-    }
-
-    function readFileAsDataUrl(file) {
-      return new Promise((resolve) => {
-        if (!file) {
-          resolve("");
-          return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => resolve("");
-        reader.readAsDataURL(file);
-      });
+    function setStatus(id, message) {
+      const el = document.getElementById(id);
+      el.textContent = message || "";
+      el.classList.toggle("show", Boolean(message));
     }
 
     function makeMapEmbedUrl(lat, lng) {
@@ -1092,7 +1074,6 @@
           return;
         }
 
-        // 只设置右侧记录框高度，左侧表单框保持原来的自然大小。
         rightPanel.style.height = `${leftPanel.offsetHeight}px`;
       });
     }
@@ -1101,21 +1082,87 @@
       const input = document.getElementById(inputId);
       const preview = document.getElementById(previewId);
 
-      input.addEventListener("change", async () => {
+      input.addEventListener("change", () => {
         const file = input.files && input.files[0];
-        const dataUrl = await readFileAsDataUrl(file);
 
-        if (dataUrl) {
-          preview.src = dataUrl;
-          preview.classList.add("show");
-        } else {
+        if (!file) {
           preview.removeAttribute("src");
           preview.classList.remove("show");
+          setTimeout(syncRightRecordPanelsOnly, 0);
+          return;
         }
 
-        setTimeout(syncRightRecordPanelsOnly, 0);
+        const reader = new FileReader();
+        reader.onload = () => {
+          preview.src = reader.result;
+          preview.classList.add("show");
+          setTimeout(syncRightRecordPanelsOnly, 0);
+        };
+        reader.readAsDataURL(file);
       });
     }
+
+    function getFileExt(file) {
+      const name = file.name || "";
+      const ext = name.split(".").pop();
+      return ext && ext !== name ? ext.toLowerCase() : "jpg";
+    }
+
+    async function uploadImage(file, folder) {
+      if (!file) {
+        return { url: "", path: "" };
+      }
+
+      const ext = getFileExt(file);
+      const path = `${folder}/${Date.now()}-${uid()}.${ext}`;
+
+      const { data, error } = await sb.storage
+        .from(PHOTO_BUCKET)
+        .upload(path, file, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: file.type || "image/jpeg"
+        });
+
+      if (error) {
+        throw error;
+      }
+
+      const { data: publicData } = sb.storage
+        .from(PHOTO_BUCKET)
+        .getPublicUrl(data.path);
+
+      return {
+        url: publicData.publicUrl,
+        path: data.path
+      };
+    }
+
+    async function removeImage(path) {
+      if (!path) return;
+
+      await sb.storage
+        .from(PHOTO_BUCKET)
+        .remove([path]);
+    }
+
+    function checkSupabaseConfig() {
+      if (
+        SUPABASE_URL.includes("你的项目ID") ||
+        SUPABASE_ANON_KEY.includes("你的anon") ||
+        !SUPABASE_URL ||
+        !SUPABASE_ANON_KEY
+      ) {
+        alert("请先在 index.html 顶部脚本里填写 SUPABASE_URL 和 SUPABASE_ANON_KEY。");
+        return false;
+      }
+
+      return true;
+    }
+
+    // ===============================
+    // 3. 定位功能
+    // ===============================
 
     setupImagePreview("spotPhoto", "spotPreview");
     setupImagePreview("dailyPhoto", "dailyPreview");
@@ -1172,41 +1219,122 @@
       );
     });
 
+    // ===============================
+    // 4. 在线保存：打卡照片
+    // ===============================
+
+    async function loadSpotCheckins() {
+      const list = document.getElementById("spotList");
+      list.innerHTML = `<div class="loading">正在加载打卡照片...</div>`;
+
+      const { data, error } = await sb
+        .from("spot_checkins")
+        .select("*")
+        .order("spot_date", { ascending: false })
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        list.innerHTML = `<div class="empty">加载失败：${escapeHtml(error.message)}</div>`;
+        return;
+      }
+
+      renderSpotCheckins(data || []);
+      syncRightRecordPanelsOnly();
+    }
+
+    function renderSpotCheckins(checkins) {
+      const list = document.getElementById("spotList");
+
+      if (!checkins.length) {
+        list.innerHTML = `<div class="empty">还没有打卡照片。<br />去上传第一张约会照片吧。</div>`;
+        return;
+      }
+
+      list.innerHTML = checkins.map((item) => {
+        const hasLocation = item.latitude && item.longitude;
+        const photoHtml = item.photo_url
+          ? `<img src="${item.photo_url}" alt="${escapeHtml(item.spot_name)}" />`
+          : "";
+
+        const mapHtml = hasLocation
+          ? `<div class="mini-map"><iframe loading="lazy" src="${makeMapEmbedUrl(item.latitude, item.longitude)}"></iframe></div>`
+          : "";
+
+        const mapButton = hasLocation
+          ? `<a class="link-button ghost small-button" href="${makeMapOpenUrl(item.latitude, item.longitude)}" target="_blank" rel="noreferrer">打开地图</a>`
+          : "";
+
+        const locationText = hasLocation
+          ? `<span>📍 ${item.latitude}, ${item.longitude}</span>`
+          : `<span>📍 未记录定位</span>`;
+
+        return `
+          <article class="check-card">
+            ${photoHtml}
+            <div class="check-body">
+              <div class="meta-row">
+                <span class="tag">📸 照片打卡</span>
+                <span>🗓 ${formatDate(item.spot_date)}</span>
+                ${locationText}
+              </div>
+              <h3>${escapeHtml(item.spot_name)}</h3>
+              ${mapHtml}
+              <div class="card-actions">
+                ${mapButton}
+                <button class="danger small-button" onclick="deleteSpotCheckin('${item.id}', '${escapeHtml(item.photo_path || "")}')">删除</button>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
     document.getElementById("spotForm").addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (!checkSupabaseConfig()) return;
 
+      const submitBtn = document.getElementById("spotSubmitBtn");
       const spotName = document.getElementById("spotName").value.trim();
       const spotDate = document.getElementById("spotDate").value;
       const photoFile = document.getElementById("spotPhoto").files[0];
-      const photoDataUrl = await readFileAsDataUrl(photoFile);
 
       if (!spotName || !spotDate) {
         alert("请填写打卡点和打卡日期。");
         return;
       }
 
-      const checkins = getStorage(STORAGE_KEYS.spotCheckins);
-
-      checkins.unshift({
-        id: uid(),
-        spotName,
-        spotDate,
-        photo: photoDataUrl,
-        location: currentLocation,
-        createdAt: new Date().toISOString()
-      });
+      submitBtn.disabled = true;
+      setStatus("spotStatus", "正在上传照片并保存记录...");
 
       try {
-        setStorage(STORAGE_KEYS.spotCheckins, checkins);
-      } catch (error) {
-        alert("保存失败：照片可能太大了。请压缩照片后再试。");
-        return;
-      }
+        const uploaded = await uploadImage(photoFile, "spot-checkins");
 
-      resetSpotForm();
-      renderSpotCheckins();
-      syncRightRecordPanelsOnly();
-      throwHearts();
+        const { error } = await sb
+          .from("spot_checkins")
+          .insert({
+            spot_name: spotName,
+            spot_date: spotDate,
+            photo_url: uploaded.url,
+            photo_path: uploaded.path,
+            latitude: currentLocation ? Number(currentLocation.lat) : null,
+            longitude: currentLocation ? Number(currentLocation.lng) : null,
+            accuracy_m: currentLocation ? currentLocation.accuracy : null
+          });
+
+        if (error) throw error;
+
+        resetSpotForm();
+        await loadSpotCheckins();
+        setStatus("spotStatus", "保存成功。");
+        setTimeout(() => setStatus("spotStatus", ""), 2200);
+        throwHearts();
+      } catch (error) {
+        console.error(error);
+        setStatus("spotStatus", `保存失败：${error.message || "请检查 Supabase 配置和 RLS/Storage 权限。"}`);
+      } finally {
+        submitBtn.disabled = false;
+        syncRightRecordPanelsOnly();
+      }
     });
 
     function resetSpotForm() {
@@ -1225,47 +1353,72 @@
       syncRightRecordPanelsOnly();
     }
 
-    function renderSpotCheckins() {
-      const list = document.getElementById("spotList");
-      const checkins = getStorage(STORAGE_KEYS.spotCheckins);
+    async function deleteSpotCheckin(id, photoPath) {
+      if (!checkSupabaseConfig()) return;
+      if (!confirm("确定要删除这条照片打卡吗？")) return;
+
+      try {
+        await removeImage(photoPath);
+
+        const { error } = await sb
+          .from("spot_checkins")
+          .delete()
+          .eq("id", id);
+
+        if (error) throw error;
+
+        await loadSpotCheckins();
+      } catch (error) {
+        alert(`删除失败：${error.message || "请检查删除权限。"}`);
+      }
+    }
+
+    // ===============================
+    // 5. 在线保存：日常打卡
+    // ===============================
+
+    async function loadDailyCheckins() {
+      const list = document.getElementById("dailyList");
+      list.innerHTML = `<div class="loading">正在加载日常记录...</div>`;
+
+      const { data, error } = await sb
+        .from("daily_checkins")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        list.innerHTML = `<div class="empty">加载失败：${escapeHtml(error.message)}</div>`;
+        return;
+      }
+
+      renderDailyCheckins(data || []);
+      syncRightRecordPanelsOnly();
+    }
+
+    function renderDailyCheckins(checkins) {
+      const list = document.getElementById("dailyList");
 
       if (!checkins.length) {
-        list.innerHTML = `<div class="empty">还没有打卡照片。<br />去上传第一张约会照片吧。</div>`;
+        list.innerHTML = `<div class="empty">还没有日常打卡。<br />写下今天第一句想记录的话吧。</div>`;
         return;
       }
 
       list.innerHTML = checkins.map((item) => {
-        const hasLocation = item.location && item.location.lat && item.location.lng;
-        const photoHtml = item.photo
-          ? `<img src="${item.photo}" alt="${escapeHtml(item.spotName)}" />`
+        const photoHtml = item.photo_url
+          ? `<img src="${item.photo_url}" alt="日常打卡照片" />`
           : "";
-
-        const mapHtml = hasLocation
-          ? `<div class="mini-map"><iframe loading="lazy" src="${makeMapEmbedUrl(item.location.lat, item.location.lng)}"></iframe></div>`
-          : "";
-
-        const mapButton = hasLocation
-          ? `<a class="link-button ghost small-button" href="${makeMapOpenUrl(item.location.lat, item.location.lng)}" target="_blank" rel="noreferrer">打开地图</a>`
-          : "";
-
-        const locationText = hasLocation
-          ? `<span>📍 ${item.location.lat}, ${item.location.lng}</span>`
-          : `<span>📍 未记录定位</span>`;
 
         return `
           <article class="check-card">
             ${photoHtml}
             <div class="check-body">
               <div class="meta-row">
-                <span class="tag">📸 照片打卡</span>
-                <span>🗓 ${formatDate(item.spotDate)}</span>
-                ${locationText}
+                <span class="tag">📝 日常打卡</span>
+                <span>⏰ ${formatDateTime(item.created_at)}</span>
               </div>
-              <h3>${escapeHtml(item.spotName)}</h3>
-              ${mapHtml}
+              <p>${escapeHtml(item.content)}</p>
               <div class="card-actions">
-                ${mapButton}
-                <button class="danger small-button" onclick="deleteSpotCheckin('${item.id}')">删除</button>
+                <button class="danger small-button" onclick="deleteDailyCheckin('${item.id}', '${escapeHtml(item.photo_path || "")}')">删除</button>
               </div>
             </div>
           </article>
@@ -1273,49 +1426,47 @@
       }).join("");
     }
 
-    function deleteSpotCheckin(id) {
-      if (!confirm("确定要删除这条照片打卡吗？")) return;
-
-      const checkins = getStorage(STORAGE_KEYS.spotCheckins)
-        .filter((item) => item.id !== id);
-
-      setStorage(STORAGE_KEYS.spotCheckins, checkins);
-      renderSpotCheckins();
-      syncRightRecordPanelsOnly();
-    }
-
     document.getElementById("dailyForm").addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (!checkSupabaseConfig()) return;
 
+      const submitBtn = document.getElementById("dailySubmitBtn");
       const text = document.getElementById("dailyText").value.trim();
       const photoFile = document.getElementById("dailyPhoto").files[0];
-      const photoDataUrl = await readFileAsDataUrl(photoFile);
 
       if (!text) {
         alert("请先写一点今天的日常。");
         return;
       }
 
-      const checkins = getStorage(STORAGE_KEYS.dailyCheckins);
-
-      checkins.unshift({
-        id: uid(),
-        text,
-        photo: photoDataUrl,
-        createdAt: new Date().toISOString()
-      });
+      submitBtn.disabled = true;
+      setStatus("dailyStatus", "正在上传照片并保存记录...");
 
       try {
-        setStorage(STORAGE_KEYS.dailyCheckins, checkins);
-      } catch (error) {
-        alert("保存失败：照片可能太大了。请压缩照片后再试。");
-        return;
-      }
+        const uploaded = await uploadImage(photoFile, "daily-checkins");
 
-      resetDailyForm();
-      renderDailyCheckins();
-      syncRightRecordPanelsOnly();
-      throwHearts();
+        const { error } = await sb
+          .from("daily_checkins")
+          .insert({
+            content: text,
+            photo_url: uploaded.url,
+            photo_path: uploaded.path
+          });
+
+        if (error) throw error;
+
+        resetDailyForm();
+        await loadDailyCheckins();
+        setStatus("dailyStatus", "发布成功。");
+        setTimeout(() => setStatus("dailyStatus", ""), 2200);
+        throwHearts();
+      } catch (error) {
+        console.error(error);
+        setStatus("dailyStatus", `保存失败：${error.message || "请检查 Supabase 配置和 RLS/Storage 权限。"}`);
+      } finally {
+        submitBtn.disabled = false;
+        syncRightRecordPanelsOnly();
+      }
     });
 
     function resetDailyForm() {
@@ -1327,48 +1478,29 @@
       syncRightRecordPanelsOnly();
     }
 
-    function renderDailyCheckins() {
-      const list = document.getElementById("dailyList");
-      const checkins = getStorage(STORAGE_KEYS.dailyCheckins);
-
-      if (!checkins.length) {
-        list.innerHTML = `<div class="empty">还没有日常打卡。<br />写下今天第一句想记录的话吧。</div>`;
-        return;
-      }
-
-      list.innerHTML = checkins.map((item) => {
-        const photoHtml = item.photo
-          ? `<img src="${item.photo}" alt="日常打卡照片" />`
-          : "";
-
-        return `
-          <article class="check-card">
-            ${photoHtml}
-            <div class="check-body">
-              <div class="meta-row">
-                <span class="tag">📝 日常打卡</span>
-                <span>⏰ ${formatDateTime(item.createdAt)}</span>
-              </div>
-              <p>${escapeHtml(item.text)}</p>
-              <div class="card-actions">
-                <button class="danger small-button" onclick="deleteDailyCheckin('${item.id}')">删除</button>
-              </div>
-            </div>
-          </article>
-        `;
-      }).join("");
-    }
-
-    function deleteDailyCheckin(id) {
+    async function deleteDailyCheckin(id, photoPath) {
+      if (!checkSupabaseConfig()) return;
       if (!confirm("确定要删除这条日常打卡吗？")) return;
 
-      const checkins = getStorage(STORAGE_KEYS.dailyCheckins)
-        .filter((item) => item.id !== id);
+      try {
+        await removeImage(photoPath);
 
-      setStorage(STORAGE_KEYS.dailyCheckins, checkins);
-      renderDailyCheckins();
-      syncRightRecordPanelsOnly();
+        const { error } = await sb
+          .from("daily_checkins")
+          .delete()
+          .eq("id", id);
+
+        if (error) throw error;
+
+        await loadDailyCheckins();
+      } catch (error) {
+        alert(`删除失败：${error.message || "请检查删除权限。"}`);
+      }
     }
+
+    // ===============================
+    // 6. 原来的互动效果
+    // ===============================
 
     const hearts = document.getElementById("hearts");
 
@@ -1405,10 +1537,6 @@
       }
     }
 
-    renderSpotCheckins();
-    renderDailyCheckins();
-    syncRightRecordPanelsOnly();
-
     window.addEventListener("resize", syncRightRecordPanelsOnly);
     window.addEventListener("load", syncRightRecordPanelsOnly);
 
@@ -1417,6 +1545,17 @@
         new ResizeObserver(syncRightRecordPanelsOnly).observe(panel);
       });
     }
+
+    // 首次加载在线数据
+    if (!SUPABASE_URL.includes("你的项目ID") && !SUPABASE_ANON_KEY.includes("你的anon")) {
+      loadSpotCheckins();
+      loadDailyCheckins();
+    } else {
+      document.getElementById("spotList").innerHTML = `<div class="empty">请先填写 SUPABASE_URL 和 SUPABASE_ANON_KEY。</div>`;
+      document.getElementById("dailyList").innerHTML = `<div class="empty">请先填写 SUPABASE_URL 和 SUPABASE_ANON_KEY。</div>`;
+    }
+
+    syncRightRecordPanelsOnly();
   </script>
 </body>
 </html>
