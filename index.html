@@ -328,11 +328,42 @@
       background: rgba(255, 255, 255, 0.62);
       border: 1px solid rgba(255, 122, 162, 0.18);
       box-shadow: 0 12px 30px rgba(255, 79, 134, 0.1);
+
+      /* 修复手机端 iframe 高度塌陷 / 空白 */
+      position: relative;
+      width: 100%;
+      height: 430px;
+      min-height: 430px;
+      -webkit-overflow-scrolling: touch;
     }
 
     .music-card iframe {
       display: block;
+      width: 100%;
+      height: 100%;
+      min-height: 430px;
+      border: 0;
       border-radius: 24px;
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .music-fallback {
+      margin-top: 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .music-open-link {
+      width: 100%;
+      text-align: center;
+    }
+
+    .music-tip {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+      text-align: center;
     }
 
     .checkin-layout {
@@ -691,6 +722,15 @@
       .scroll-list {
         max-height: 680px;
       }
+
+      .music-card {
+        height: 360px;
+        min-height: 360px;
+      }
+
+      .music-card iframe {
+        min-height: 360px;
+      }
     }
 
     @media (max-width: 560px) {
@@ -708,6 +748,15 @@
 
       .timeline-item:not(:last-child)::after {
         left: 36px;
+      }
+
+      .music-card {
+        height: 340px;
+        min-height: 340px;
+      }
+
+      .music-card iframe {
+        min-height: 340px;
       }
     }
   </style>
@@ -746,18 +795,34 @@
         <p>天，假装从我们在一起那天开始数。</p>
       </div>
 
-  <div class="music-card">
-    <iframe
-      frameborder="0"
-      border="0"
-      marginwidth="0"
-      marginheight="0"
-      width="100%"
-      height="430"
-      src="https://music.163.com/outchain/player?type=0&id=6901533277&auto=0&height=430">
-    </iframe>
-  </div>
-</div>
+      <div class="playlist glass">
+        <h2 class="section-title">今日恋爱歌单</h2>
+        <p class="music-desc">今日份甜蜜 BGM，一起听喜欢的歌。</p>
+
+        <div class="music-card">
+          <iframe
+            id="neteaseMusicFrame"
+            title="网易云音乐歌单播放器"
+            frameborder="0"
+            border="0"
+            marginwidth="0"
+            marginheight="0"
+            allow="autoplay; encrypted-media"
+            loading="lazy"
+            src="https://music.163.com/outchain/player?type=0&id=3136952023&auto=0&height=430">
+          </iframe>
+        </div>
+
+        <div class="music-fallback">
+          <a
+            class="link-button secondary music-open-link"
+            href="https://music.163.com/playlist?id=3136952023"
+            target="_blank"
+            rel="noreferrer">
+            手机无法显示时，点这里打开网易云歌单
+          </a>
+        </div>
+      </div>
     </section>
 
     <section>
