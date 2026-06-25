@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- version: v10 | 恋爱计数与心情模块等高 + 删除歌单模块 -->
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
@@ -322,48 +323,276 @@
       font-size: 15px;
     }
 
-    .music-card {
-      overflow: hidden;
-      border-radius: 24px;
-      background: rgba(255, 255, 255, 0.62);
-      border: 1px solid rgba(255, 122, 162, 0.18);
-      box-shadow: 0 12px 30px rgba(255, 79, 134, 0.1);
-
-      /* 修复手机端 iframe 高度塌陷 / 空白 */
-      position: relative;
-      width: 100%;
-      height: 430px;
-      min-height: 430px;
-      -webkit-overflow-scrolling: touch;
+    .top-dashboard {
+      align-items: stretch;
     }
 
-    .music-card iframe {
-      display: block;
-      width: 100%;
+    .top-dashboard .counter,
+    .top-dashboard .mood-checkin {
+      min-height: 360px;
       height: 100%;
-      min-height: 430px;
-      border: 0;
-      border-radius: 24px;
-      background: rgba(255, 255, 255, 0.72);
     }
 
-    .music-fallback {
-      margin-top: 14px;
+    .top-dashboard .counter {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .mood-checkin {
+      padding: 24px;
+      position: relative;
+    }
+
+    .mood-head,
+    .music-section-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 12px;
+    }
+
+    .mood-subtitle {
+      margin: -8px 0 0;
+      color: var(--muted);
+      line-height: 1.75;
+      font-size: 14px;
+    }
+
+    .mood-today-badge,
+    .music-section-badge {
+      flex: 0 0 auto;
+      padding: 9px 13px;
+      border-radius: 999px;
+      color: var(--rose);
+      background: rgba(255, 122, 162, 0.14);
+      font-size: 13px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .mood-current {
       display: grid;
+      grid-template-columns: 56px 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.58);
+      border: 1px solid rgba(255, 122, 162, 0.16);
+      margin-bottom: 12px;
+    }
+
+    .mood-current-icon {
+      width: 56px;
+      height: 56px;
+      display: grid;
+      place-items: center;
+      border-radius: 20px;
+      background: linear-gradient(135deg, rgba(255, 122, 162, 0.2), rgba(255, 154, 123, 0.16));
+      font-size: 28px;
+      box-shadow: 0 12px 24px rgba(255, 79, 134, 0.12);
+    }
+
+    .mood-current strong {
+      display: block;
+      font-size: 16px;
+      margin-bottom: 3px;
+    }
+
+    .mood-current p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+
+    .mood-options {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
       gap: 10px;
     }
 
-    .music-open-link {
-      width: 100%;
+    .mood-option {
+      padding: 11px 10px;
+      border-radius: 18px;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid rgba(255, 122, 162, 0.16);
+      box-shadow: none;
+      font-size: 14px;
+    }
+
+    .mood-option.active {
+      color: white;
+      background: linear-gradient(135deg, var(--rose), var(--orange));
+      box-shadow: 0 12px 26px rgba(255, 79, 134, 0.2);
+    }
+
+    .mood-note-input {
+      min-height: 82px;
+      margin-top: 14px;
+    }
+
+    .mood-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .mood-calendar {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.5);
+      border: 1px solid rgba(255, 122, 162, 0.16);
+    }
+
+    .mood-calendar-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .mood-calendar-header strong {
+      color: var(--rose);
+      font-size: 16px;
+    }
+
+    .mood-weekdays,
+    .mood-calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+    }
+
+    .mood-weekdays {
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 900;
       text-align: center;
     }
 
-    .music-tip {
-      margin: 0;
+    .mood-day {
+      min-height: 36px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid rgba(255, 122, 162, 0.12);
+      display: grid;
+      place-items: center;
+      gap: 0;
+      padding: 4px 2px;
       color: var(--muted);
-      font-size: 13px;
-      line-height: 1.7;
-      text-align: center;
+      font-size: 12px;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .mood-day:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255, 79, 134, 0.38);
+      background: rgba(255, 255, 255, 0.88);
+    }
+
+    .mood-day.is-empty {
+      opacity: 0;
+    }
+
+    .mood-day.is-today {
+      border-color: rgba(255, 79, 134, 0.55);
+      box-shadow: 0 8px 20px rgba(255, 79, 134, 0.12);
+    }
+
+    .mood-day-icon {
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .mood-day-number {
+      line-height: 1;
+      font-weight: 900;
+    }
+
+    .mood-popover {
+      position: absolute;
+      inset: 0;
+      z-index: 5;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      border-radius: 34px;
+      background: rgba(74, 43, 53, 0.16);
+      backdrop-filter: blur(8px);
+    }
+
+    .mood-popover.show {
+      display: flex;
+    }
+
+    .mood-popover-card {
+      width: min(430px, 100%);
+      padding: 20px;
+      border-radius: 26px;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(255, 122, 162, 0.2);
+      box-shadow: 0 22px 54px rgba(255, 79, 134, 0.22);
+    }
+
+    .mood-popover-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .mood-popover-head strong {
+      color: var(--rose);
+      font-size: 18px;
+    }
+
+    .music-section {
+      padding: clamp(26px, 4vw, 42px);
+    }
+
+    .music-section .section-title {
+      margin-bottom: 8px;
+    }
+
+    .music-section .music-desc {
+      margin: 0;
+    }
+
+    .large-native-player {
+      grid-template-columns: 230px 1fr;
+      padding: clamp(24px, 4vw, 36px);
+    }
+
+    .large-native-player .native-cover-wrap {
+      width: 230px;
+      height: 230px;
+    }
+
+    .large-native-player .native-cover {
+      width: 198px;
+      height: 198px;
+      border-radius: 34px;
+    }
+
+    .large-native-player .native-vinyl {
+      width: 156px;
+      height: 156px;
+    }
+
+    .large-native-player .native-main h3 {
+      font-size: clamp(30px, 5vw, 48px);
     }
 
     .checkin-layout {
@@ -723,13 +952,13 @@
         max-height: 680px;
       }
 
-      .music-card {
-        height: 360px;
-        min-height: 360px;
+      .mood-head,
+      .music-section-head {
+        display: grid;
       }
 
-      .music-card iframe {
-        min-height: 360px;
+      .mood-options {
+        grid-template-columns: repeat(2, 1fr);
       }
     }
 
@@ -750,13 +979,41 @@
         left: 36px;
       }
 
-      .music-card {
-        height: 340px;
-        min-height: 340px;
+      .mood-checkin {
+        padding: 22px;
+        min-height: auto;
       }
 
-      .music-card iframe {
-        min-height: 340px;
+      .top-dashboard .counter,
+      .top-dashboard .mood-checkin {
+        height: auto;
+      }
+
+      .top-dashboard .counter {
+        min-height: 240px;
+      }
+
+      .mood-current {
+        grid-template-columns: 56px 1fr;
+      }
+
+      .mood-current-icon {
+        width: 56px;
+        height: 56px;
+        font-size: 28px;
+      }
+
+      .mood-calendar {
+        padding: 12px;
+      }
+
+      .mood-day {
+        min-height: 38px;
+        border-radius: 12px;
+      }
+
+      .mood-options {
+        grid-template-columns: 1fr;
       }
     }
   </style>
@@ -789,38 +1046,66 @@
       </div>
     </section>
 
-    <section class="counter-wrap">
+    <section class="counter-wrap top-dashboard">
       <div class="counter glass">
         <div class="number" id="daysTogether">0</div>
         <p>天，假装从我们在一起那天开始数。</p>
       </div>
 
-      <div class="playlist glass">
-        <h2 class="section-title">今日恋爱歌单</h2>
-        <p class="music-desc">今日份甜蜜 BGM，一起听喜欢的歌。</p>
-
-        <div class="music-card">
-          <iframe
-            id="neteaseMusicFrame"
-            title="网易云音乐歌单播放器"
-            frameborder="0"
-            border="0"
-            marginwidth="0"
-            marginheight="0"
-            allow="autoplay; encrypted-media"
-            loading="lazy"
-            src="https://music.163.com/outchain/player?type=0&id=3136952023&auto=0&height=430">
-          </iframe>
+      <div class="mood-checkin glass">
+        <div class="mood-head">
+          <div>
+            <h2 class="section-title">今日心情</h2>
+            <p class="mood-subtitle">点击日历日期，就可以给那一天打卡心情。</p>
+          </div>
+          <div class="mood-today-badge" id="moodTodayDate">今天</div>
         </div>
 
-        <div class="music-fallback">
-          <a
-            class="link-button secondary music-open-link"
-            href="https://music.163.com/playlist?id=3136952023"
-            target="_blank"
-            rel="noreferrer">
-            手机无法显示时，点这里打开网易云歌单
-          </a>
+        <div class="mood-current">
+          <div class="mood-current-icon" id="moodTodayIcon">♡</div>
+          <div>
+            <strong id="moodTodayText">今天还没有打卡</strong>
+            <p id="moodTodayNote">点一下今天的日期，记录今日心情。</p>
+          </div>
+        </div>
+
+        <div class="mood-calendar">
+          <div class="mood-calendar-header">
+            <button type="button" class="ghost small-button" onclick="changeMoodMonth(-1)">上个月</button>
+            <strong id="moodMonthTitle">本月心情</strong>
+            <button type="button" class="ghost small-button" onclick="changeMoodMonth(1)">下个月</button>
+          </div>
+
+          <div class="mood-weekdays">
+            <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+          </div>
+
+          <div class="mood-calendar-grid" id="moodCalendarGrid"></div>
+        </div>
+
+        <div class="mood-popover" id="moodPopover" aria-hidden="true">
+          <div class="mood-popover-card">
+            <div class="mood-popover-head">
+              <strong id="moodPopoverDate">选择心情</strong>
+              <button type="button" class="ghost small-button" onclick="closeMoodPopover()">关闭</button>
+            </div>
+
+            <div class="mood-options" id="moodOptions">
+              <button type="button" class="mood-option" data-mood="happy" data-icon="😊" data-label="开心">😊 开心</button>
+              <button type="button" class="mood-option" data-mood="sweet" data-icon="💗" data-label="超甜">💗 超甜</button>
+              <button type="button" class="mood-option" data-mood="miss" data-icon="🥺" data-label="想你">🥺 想你</button>
+              <button type="button" class="mood-option" data-mood="calm" data-icon="🌙" data-label="平静">🌙 平静</button>
+              <button type="button" class="mood-option" data-mood="tired" data-icon="😴" data-label="疲惫">😴 疲惫</button>
+              <button type="button" class="mood-option" data-mood="sad" data-icon="🌧️" data-label="低落">🌧️ 低落</button>
+            </div>
+
+            <textarea id="moodNoteInput" class="mood-note-input" placeholder="可以写一句当天的心情，比如：今天很想见你。"></textarea>
+
+            <div class="mood-actions">
+              <button type="button" class="primary" onclick="saveSelectedMood()">保存心情</button>
+              <button type="button" class="ghost" onclick="clearSelectedMood()">清除这天</button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -1104,12 +1389,217 @@
       return true;
     }
     // ===============================
-    // 3. 图片预览
+    // 4. 心情日历打卡
+    // ===============================
+
+    const MOOD_STORAGE_KEY = "loveDailyMoodRecordsV1";
+    const moodOptions = Array.from(document.querySelectorAll(".mood-option"));
+    const moodNoteInput = document.getElementById("moodNoteInput");
+    const moodTodayDate = document.getElementById("moodTodayDate");
+    const moodTodayIcon = document.getElementById("moodTodayIcon");
+    const moodTodayText = document.getElementById("moodTodayText");
+    const moodTodayNote = document.getElementById("moodTodayNote");
+    const moodMonthTitle = document.getElementById("moodMonthTitle");
+    const moodCalendarGrid = document.getElementById("moodCalendarGrid");
+    const moodPopover = document.getElementById("moodPopover");
+    const moodPopoverDate = document.getElementById("moodPopoverDate");
+
+    let selectedMood = null;
+    let selectedMoodDateKey = getMoodDateKey();
+    let moodViewDate = new Date();
+
+    const moodMap = {
+      happy: { icon: "😊", label: "开心" },
+      sweet: { icon: "💗", label: "超甜" },
+      miss: { icon: "🥺", label: "想你" },
+      calm: { icon: "🌙", label: "平静" },
+      tired: { icon: "😴", label: "疲惫" },
+      sad: { icon: "🌧️", label: "低落" }
+    };
+
+    function getMoodDateKey(date = new Date()) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+
+      return `${year}-${month}-${day}`;
+    }
+
+    function getMoodRecords() {
+      try {
+        return JSON.parse(localStorage.getItem(MOOD_STORAGE_KEY)) || {};
+      } catch (error) {
+        return {};
+      }
+    }
+
+    function setMoodRecords(records) {
+      localStorage.setItem(MOOD_STORAGE_KEY, JSON.stringify(records));
+    }
+
+    function getDateFromKey(dateKey) {
+      return new Date(`${dateKey}T00:00:00`);
+    }
+
+    function updateMoodOptionActive() {
+      moodOptions.forEach((button) => {
+        button.classList.toggle("active", button.dataset.mood === selectedMood);
+      });
+    }
+
+    function renderTodayMood() {
+      const todayKey = getMoodDateKey();
+      const records = getMoodRecords();
+      const todayRecord = records[todayKey];
+      const todayText = new Intl.DateTimeFormat("zh-CN", {
+        month: "2-digit",
+        day: "2-digit",
+        weekday: "short"
+      }).format(new Date());
+
+      moodTodayDate.textContent = todayText;
+
+      if (!todayRecord) {
+        moodTodayIcon.textContent = "♡";
+        moodTodayText.textContent = "今天还没有打卡";
+        moodTodayNote.textContent = "点一下今天的日期，记录今日心情。";
+        return;
+      }
+
+      const mood = moodMap[todayRecord.mood] || { icon: "♡", label: "未知心情" };
+      moodTodayIcon.textContent = mood.icon;
+      moodTodayText.textContent = `今天是「${mood.label}」`;
+      moodTodayNote.textContent = todayRecord.note || "今天的心情已经记录好啦。";
+    }
+
+    function renderMoodCalendar() {
+      const records = getMoodRecords();
+      const year = moodViewDate.getFullYear();
+      const month = moodViewDate.getMonth();
+      const todayKey = getMoodDateKey();
+
+      moodMonthTitle.textContent = new Intl.DateTimeFormat("zh-CN", {
+        year: "numeric",
+        month: "long"
+      }).format(moodViewDate);
+
+      const firstDay = new Date(year, month, 1);
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const startWeekday = firstDay.getDay();
+
+      const cells = [];
+
+      for (let i = 0; i < startWeekday; i++) {
+        cells.push(`<div class="mood-day is-empty"></div>`);
+      }
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month, day);
+        const dateKey = getMoodDateKey(date);
+        const record = records[dateKey];
+        const mood = record ? moodMap[record.mood] : null;
+        const todayClass = dateKey === todayKey ? "is-today" : "";
+
+        cells.push(`
+          <button type="button" class="mood-day ${todayClass}" onclick="openMoodPopover('${dateKey}')" title="${record ? escapeHtml(record.note || mood.label) : "点击打卡心情"}">
+            <span class="mood-day-icon">${mood ? mood.icon : ""}</span>
+            <span class="mood-day-number">${day}</span>
+          </button>
+        `);
+      }
+
+      moodCalendarGrid.innerHTML = cells.join("");
+    }
+
+    function openMoodPopover(dateKey) {
+      const records = getMoodRecords();
+      const record = records[dateKey];
+      const date = getDateFromKey(dateKey);
+
+      selectedMoodDateKey = dateKey;
+      selectedMood = record ? record.mood : null;
+      moodNoteInput.value = record ? record.note || "" : "";
+
+      moodPopoverDate.textContent = new Intl.DateTimeFormat("zh-CN", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        weekday: "short"
+      }).format(date);
+
+      updateMoodOptionActive();
+      moodPopover.classList.add("show");
+      moodPopover.setAttribute("aria-hidden", "false");
+    }
+
+    function closeMoodPopover() {
+      moodPopover.classList.remove("show");
+      moodPopover.setAttribute("aria-hidden", "true");
+    }
+
+    moodOptions.forEach((button) => {
+      button.addEventListener("click", () => {
+        selectedMood = button.dataset.mood;
+        updateMoodOptionActive();
+      });
+    });
+
+    function saveSelectedMood() {
+      if (!selectedMoodDateKey) return;
+
+      if (!selectedMood) {
+        alert("请先选择一个心情。");
+        return;
+      }
+
+      const records = getMoodRecords();
+
+      records[selectedMoodDateKey] = {
+        mood: selectedMood,
+        note: moodNoteInput.value.trim(),
+        updatedAt: new Date().toISOString()
+      };
+
+      setMoodRecords(records);
+      renderTodayMood();
+      renderMoodCalendar();
+      closeMoodPopover();
+      throwHearts();
+    }
+
+    function clearSelectedMood() {
+      if (!selectedMoodDateKey) return;
+
+      const records = getMoodRecords();
+      delete records[selectedMoodDateKey];
+      setMoodRecords(records);
+
+      renderTodayMood();
+      renderMoodCalendar();
+      closeMoodPopover();
+    }
+
+    function changeMoodMonth(offset) {
+      moodViewDate = new Date(moodViewDate.getFullYear(), moodViewDate.getMonth() + offset, 1);
+      renderMoodCalendar();
+    }
+
+    moodPopover.addEventListener("click", (event) => {
+      if (event.target === moodPopover) {
+        closeMoodPopover();
+      }
+    });
+
+    renderTodayMood();
+    renderMoodCalendar();
+
+    // ===============================
+    // 5. 图片预览
     // ===============================
 
     setupImagePreview("dailyPhoto", "dailyPreview");
     // ===============================
-    // 4. 在线保存：日常打卡
+    // 6. 在线保存：日常打卡
     // ===============================
 
     async function loadDailyCheckins() {
@@ -1234,7 +1724,7 @@
     }
 
     // ===============================
-    // 5. 原来的互动效果
+    // 7. 原来的互动效果
     // ===============================
 
     const hearts = document.getElementById("hearts");
