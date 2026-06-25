@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- version: v10 | 恋爱计数与心情模块等高 + 删除歌单模块 -->
+<!-- version: v11 | 仅当天可心情打卡，历史日期仅查看或删除 -->
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
@@ -558,6 +558,61 @@
       font-size: 18px;
     }
 
+    .mood-popover-tip {
+      margin: -4px 0 14px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .mood-view-box {
+      display: none;
+      grid-template-columns: 54px 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 13px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.68);
+      border: 1px solid rgba(255, 122, 162, 0.16);
+      margin-bottom: 14px;
+    }
+
+    .mood-view-box.show {
+      display: grid;
+    }
+
+    .mood-view-icon {
+      width: 54px;
+      height: 54px;
+      display: grid;
+      place-items: center;
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(255, 122, 162, 0.18), rgba(255, 154, 123, 0.14));
+      font-size: 28px;
+    }
+
+    .mood-view-box strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .mood-view-box p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 13px;
+    }
+
+    .mood-popover.readonly .mood-options,
+    .mood-popover.readonly .mood-note-input,
+    .mood-popover.readonly #moodSaveButton {
+      display: none;
+    }
+
+    .mood-popover.no-record #moodDeleteButton {
+      display: none;
+    }
+
     .music-section {
       padding: clamp(26px, 4vw, 42px);
     }
@@ -1090,6 +1145,18 @@
               <button type="button" class="ghost small-button" onclick="closeMoodPopover()">关闭</button>
             </div>
 
+            <p class="mood-popover-tip" id="moodPopoverTip">
+              只有今天可以新增或修改心情，其他日期只能查看或删除已有记录。
+            </p>
+
+            <div class="mood-view-box" id="moodViewBox">
+              <div class="mood-view-icon" id="moodViewIcon">♡</div>
+              <div>
+                <strong id="moodViewText">这一天还没有心情记录</strong>
+                <p id="moodViewNote">只能查看已有记录，不能给过去或未来补打卡。</p>
+              </div>
+            </div>
+
             <div class="mood-options" id="moodOptions">
               <button type="button" class="mood-option" data-mood="happy" data-icon="😊" data-label="开心">😊 开心</button>
               <button type="button" class="mood-option" data-mood="sweet" data-icon="💗" data-label="超甜">💗 超甜</button>
@@ -1102,8 +1169,8 @@
             <textarea id="moodNoteInput" class="mood-note-input" placeholder="可以写一句当天的心情，比如：今天很想见你。"></textarea>
 
             <div class="mood-actions">
-              <button type="button" class="primary" onclick="saveSelectedMood()">保存心情</button>
-              <button type="button" class="ghost" onclick="clearSelectedMood()">清除这天</button>
+              <button type="button" id="moodSaveButton" class="primary" onclick="saveSelectedMood()">保存今日心情</button>
+              <button type="button" id="moodDeleteButton" class="ghost" onclick="clearSelectedMood()">删除记录</button>
             </div>
           </div>
         </div>
@@ -1403,6 +1470,13 @@
     const moodCalendarGrid = document.getElementById("moodCalendarGrid");
     const moodPopover = document.getElementById("moodPopover");
     const moodPopoverDate = document.getElementById("moodPopoverDate");
+    const moodPopoverTip = document.getElementById("moodPopoverTip");
+    const moodViewBox = document.getElementById("moodViewBox");
+    const moodViewIcon = document.getElementById("moodViewIcon");
+    const moodViewText = document.getElementById("moodViewText");
+    const moodViewNote = document.getElementById("moodViewNote");
+    const moodSaveButton = document.getElementById("moodSaveButton");
+    const moodDeleteButton = document.getElementById("moodDeleteButton");
 
     let selectedMood = null;
     let selectedMoodDateKey = getMoodDateKey();
@@ -1441,6 +1515,10 @@
       return new Date(`${dateKey}T00:00:00`);
     }
 
+    function isTodayMoodDate(dateKey) {
+      return dateKey === getMoodDateKey();
+    }
+
     function updateMoodOptionActive() {
       moodOptions.forEach((button) => {
         button.classList.toggle("active", button.dataset.mood === selectedMood);
@@ -1462,7 +1540,7 @@
       if (!todayRecord) {
         moodTodayIcon.textContent = "♡";
         moodTodayText.textContent = "今天还没有打卡";
-        moodTodayNote.textContent = "点一下今天的日期，记录今日心情。";
+        moodTodayNote.textContent = "只有今天可以新增或修改心情。";
         return;
       }
 
@@ -1499,9 +1577,12 @@
         const record = records[dateKey];
         const mood = record ? moodMap[record.mood] : null;
         const todayClass = dateKey === todayKey ? "is-today" : "";
+        const titleText = dateKey === todayKey
+          ? "点击打卡或修改今天心情"
+          : (record ? "点击查看或删除这天心情" : "这一天没有心情记录");
 
         cells.push(`
-          <button type="button" class="mood-day ${todayClass}" onclick="openMoodPopover('${dateKey}')" title="${record ? escapeHtml(record.note || mood.label) : "点击打卡心情"}">
+          <button type="button" class="mood-day ${todayClass}" onclick="openMoodPopover('${dateKey}')" title="${escapeHtml(titleText)}">
             <span class="mood-day-icon">${mood ? mood.icon : ""}</span>
             <span class="mood-day-number">${day}</span>
           </button>
@@ -1515,10 +1596,12 @@
       const records = getMoodRecords();
       const record = records[dateKey];
       const date = getDateFromKey(dateKey);
+      const canEdit = isTodayMoodDate(dateKey);
+      const mood = record ? moodMap[record.mood] : null;
 
       selectedMoodDateKey = dateKey;
-      selectedMood = record ? record.mood : null;
-      moodNoteInput.value = record ? record.note || "" : "";
+      selectedMood = canEdit && record ? record.mood : null;
+      moodNoteInput.value = canEdit && record ? record.note || "" : "";
 
       moodPopoverDate.textContent = new Intl.DateTimeFormat("zh-CN", {
         year: "numeric",
@@ -1526,6 +1609,31 @@
         day: "2-digit",
         weekday: "short"
       }).format(date);
+
+      moodPopover.classList.toggle("readonly", !canEdit);
+      moodPopover.classList.toggle("no-record", !record);
+
+      if (canEdit) {
+        moodPopoverTip.textContent = "今天可以新增或修改心情。";
+        moodViewBox.classList.remove("show");
+        moodSaveButton.textContent = record ? "更新今日心情" : "保存今日心情";
+        moodDeleteButton.textContent = "删除今天记录";
+      } else {
+        moodPopoverTip.textContent = "非当天日期只能查看心情，或删除已有记录，不能新增或修改。";
+        moodViewBox.classList.add("show");
+
+        if (record && mood) {
+          moodViewIcon.textContent = mood.icon;
+          moodViewText.textContent = `这一天是「${mood.label}」`;
+          moodViewNote.textContent = record.note || "这一天有心情记录，但没有备注。";
+        } else {
+          moodViewIcon.textContent = "♡";
+          moodViewText.textContent = "这一天还没有心情记录";
+          moodViewNote.textContent = "只能查看已有记录，不能给过去或未来补打卡。";
+        }
+
+        moodDeleteButton.textContent = "删除这天记录";
+      }
 
       updateMoodOptionActive();
       moodPopover.classList.add("show");
@@ -1539,6 +1647,8 @@
 
     moodOptions.forEach((button) => {
       button.addEventListener("click", () => {
+        if (!isTodayMoodDate(selectedMoodDateKey)) return;
+
         selectedMood = button.dataset.mood;
         updateMoodOptionActive();
       });
@@ -1546,6 +1656,11 @@
 
     function saveSelectedMood() {
       if (!selectedMoodDateKey) return;
+
+      if (!isTodayMoodDate(selectedMoodDateKey)) {
+        alert("只能给今天打卡或修改今天的心情。");
+        return;
+      }
 
       if (!selectedMood) {
         alert("请先选择一个心情。");
@@ -1571,6 +1686,12 @@
       if (!selectedMoodDateKey) return;
 
       const records = getMoodRecords();
+
+      if (!records[selectedMoodDateKey]) {
+        closeMoodPopover();
+        return;
+      }
+
       delete records[selectedMoodDateKey];
       setMoodRecords(records);
 
