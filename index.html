@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- version: v11 | 仅当天可心情打卡，历史日期仅查看或删除 -->
+<!-- version: v13 | Supabase 背景音乐存储 + 极简播放器 -->
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
@@ -935,6 +935,60 @@
       line-height: 1.8;
     }
 
+    .bgm-player {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 9;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.76);
+      box-shadow: 0 18px 46px rgba(255, 79, 134, 0.2);
+    }
+
+    .bgm-disc {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      color: white;
+      font-weight: 1000;
+      background:
+        radial-gradient(circle, rgba(255,255,255,0.95) 0 6px, rgba(255,122,162,0.95) 7px 16px, rgba(74,43,53,0.9) 17px 100%);
+      box-shadow: 0 10px 24px rgba(255, 79, 134, 0.2);
+    }
+
+    .bgm-player.playing .bgm-disc {
+      animation: bgmSpin 4.8s linear infinite;
+    }
+
+    @keyframes bgmSpin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .bgm-toggle {
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      border-radius: 50%;
+      color: white;
+      background: linear-gradient(135deg, var(--rose), var(--orange));
+      box-shadow: 0 10px 24px rgba(255, 79, 134, 0.24);
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+    }
+
+    .bgm-player.error .bgm-disc {
+      background:
+        radial-gradient(circle, rgba(255,255,255,0.95) 0 6px, rgba(180,35,70,0.85) 7px 16px, rgba(74,43,53,0.9) 17px 100%);
+    }
+
     .modal {
       position: fixed;
       inset: 0;
@@ -1034,6 +1088,11 @@
         left: 36px;
       }
 
+      .bgm-player {
+        right: 14px;
+        bottom: 14px;
+      }
+
       .mood-checkin {
         padding: 22px;
         min-height: auto;
@@ -1076,6 +1135,14 @@
 
 <body>
   <div class="floating-hearts" id="hearts"></div>
+
+  <div class="bgm-player glass" id="bgmPlayer">
+    <div class="bgm-disc" id="bgmDisc">♪</div>
+    <button type="button" class="bgm-toggle" id="bgmToggle" onclick="toggleBgm()" aria-label="播放或暂停背景音乐">
+      ▶
+    </button>
+    <audio id="bgmAudio" preload="metadata" loop></audio>
+  </div>
 
   <main class="page">
     <section class="hero">
@@ -1453,10 +1520,89 @@
         return false;
       }
 
-      return true;
-    }
     // ===============================
-    // 4. 心情日历打卡
+    // 4. 背景音乐播放器
+    // ===============================
+    // 音乐文件请上传到 Supabase Storage 的 love-music bucket。
+    // 然后在 background_music 表里写入 public_url，并设置 is_active = true。
+
+    const bgmAudio = document.getElementById("bgmAudio");
+    const bgmPlayer = document.getElementById("bgmPlayer");
+    const bgmToggle = document.getElementById("bgmToggle");
+
+    async function loadBgmFromSupabase() {
+      try {
+        const { data, error } = await sb
+          .from("background_music")
+          .select("title, public_url")
+          .eq("is_active", true)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) throw error;
+
+        if (!data || !data.public_url) {
+          bgmPlayer.classList.add("error");
+          bgmToggle.textContent = "!";
+          bgmToggle.title = "还没有配置背景音乐，请先上传音乐并更新 background_music 表。";
+          return;
+        }
+
+        bgmAudio.src = data.public_url;
+        bgmToggle.title = data.title || "背景音乐";
+      } catch (error) {
+        console.error("背景音乐加载失败：", error);
+        bgmPlayer.classList.add("error");
+        bgmToggle.textContent = "!";
+        bgmToggle.title = "背景音乐加载失败，请检查 Supabase 表和权限。";
+      }
+    }
+
+    async function toggleBgm() {
+      try {
+        if (!bgmAudio.src) {
+          await loadBgmFromSupabase();
+        }
+
+        if (!bgmAudio.src) {
+          alert("还没有配置背景音乐。请先在 Supabase 的 love-music bucket 上传音乐，并在 background_music 表里填入 public_url。");
+          return;
+        }
+
+        if (bgmAudio.paused) {
+          await bgmAudio.play();
+        } else {
+          bgmAudio.pause();
+        }
+      } catch (error) {
+        bgmPlayer.classList.add("error");
+        bgmToggle.textContent = "!";
+        alert("背景音乐暂时无法播放，请检查音乐文件链接是否可访问，或手机浏览器是否拦截播放。");
+      }
+    }
+
+    bgmAudio.addEventListener("play", () => {
+      bgmPlayer.classList.add("playing");
+      bgmPlayer.classList.remove("error");
+      bgmToggle.textContent = "⏸";
+    });
+
+    bgmAudio.addEventListener("pause", () => {
+      bgmPlayer.classList.remove("playing");
+      bgmToggle.textContent = "▶";
+    });
+
+    bgmAudio.addEventListener("error", () => {
+      bgmPlayer.classList.add("error");
+      bgmPlayer.classList.remove("playing");
+      bgmToggle.textContent = "!";
+    });
+
+    loadBgmFromSupabase();
+
+    // ===============================
+    // 5. 心情日历打卡
     // ===============================
 
     const MOOD_STORAGE_KEY = "loveDailyMoodRecordsV1";
@@ -1715,12 +1861,12 @@
     renderMoodCalendar();
 
     // ===============================
-    // 5. 图片预览
+    // 6. 图片预览
     // ===============================
 
     setupImagePreview("dailyPhoto", "dailyPreview");
     // ===============================
-    // 6. 在线保存：日常打卡
+    // 7. 在线保存：日常打卡
     // ===============================
 
     async function loadDailyCheckins() {
@@ -1845,7 +1991,7 @@
     }
 
     // ===============================
-    // 7. 原来的互动效果
+    // 8. 原来的互动效果
     // ===============================
 
     const hearts = document.getElementById("hearts");
