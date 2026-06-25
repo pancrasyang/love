@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- version: v13 | Supabase 背景音乐存储 + 极简播放器 -->
+<!-- version: v12 | 新增网易云背景音乐小播放器 -->
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
@@ -940,10 +940,12 @@
       right: 18px;
       bottom: 18px;
       z-index: 9;
-      display: inline-flex;
-      align-items: center;
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr) 44px;
       gap: 10px;
-      padding: 10px;
+      align-items: center;
+      width: min(330px, calc(100vw - 32px));
+      padding: 10px 12px;
       border-radius: 999px;
       background: rgba(255, 255, 255, 0.76);
       box-shadow: 0 18px 46px rgba(255, 79, 134, 0.2);
@@ -969,6 +971,30 @@
     @keyframes bgmSpin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
+    }
+
+    .bgm-info {
+      min-width: 0;
+      line-height: 1.25;
+    }
+
+    .bgm-info strong {
+      display: block;
+      color: var(--text);
+      font-size: 14px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .bgm-info span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
     }
 
     .bgm-toggle {
@@ -1089,8 +1115,10 @@
       }
 
       .bgm-player {
-        right: 14px;
+        left: 16px;
+        right: 16px;
         bottom: 14px;
+        width: auto;
       }
 
       .mood-checkin {
@@ -1138,10 +1166,19 @@
 
   <div class="bgm-player glass" id="bgmPlayer">
     <div class="bgm-disc" id="bgmDisc">♪</div>
+    <div class="bgm-info">
+      <strong>背景音乐</strong>
+      <span>网易云音乐 · 28232266</span>
+    </div>
     <button type="button" class="bgm-toggle" id="bgmToggle" onclick="toggleBgm()" aria-label="播放或暂停背景音乐">
       ▶
     </button>
-    <audio id="bgmAudio" preload="metadata" loop></audio>
+    <audio
+      id="bgmAudio"
+      preload="metadata"
+      loop
+      src="https://music.163.com/song/media/outer/url?id=28232266.mp3">
+    </audio>
   </div>
 
   <main class="page">
@@ -1523,53 +1560,13 @@
     // ===============================
     // 4. 背景音乐播放器
     // ===============================
-    // 音乐文件请上传到 Supabase Storage 的 love-music bucket。
-    // 然后在 background_music 表里写入 public_url，并设置 is_active = true。
 
     const bgmAudio = document.getElementById("bgmAudio");
     const bgmPlayer = document.getElementById("bgmPlayer");
     const bgmToggle = document.getElementById("bgmToggle");
 
-    async function loadBgmFromSupabase() {
-      try {
-        const { data, error } = await sb
-          .from("background_music")
-          .select("title, public_url")
-          .eq("is_active", true)
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (error) throw error;
-
-        if (!data || !data.public_url) {
-          bgmPlayer.classList.add("error");
-          bgmToggle.textContent = "!";
-          bgmToggle.title = "还没有配置背景音乐，请先上传音乐并更新 background_music 表。";
-          return;
-        }
-
-        bgmAudio.src = data.public_url;
-        bgmToggle.title = data.title || "背景音乐";
-      } catch (error) {
-        console.error("背景音乐加载失败：", error);
-        bgmPlayer.classList.add("error");
-        bgmToggle.textContent = "!";
-        bgmToggle.title = "背景音乐加载失败，请检查 Supabase 表和权限。";
-      }
-    }
-
     async function toggleBgm() {
       try {
-        if (!bgmAudio.src) {
-          await loadBgmFromSupabase();
-        }
-
-        if (!bgmAudio.src) {
-          alert("还没有配置背景音乐。请先在 Supabase 的 love-music bucket 上传音乐，并在 background_music 表里填入 public_url。");
-          return;
-        }
-
         if (bgmAudio.paused) {
           await bgmAudio.play();
         } else {
@@ -1578,7 +1575,7 @@
       } catch (error) {
         bgmPlayer.classList.add("error");
         bgmToggle.textContent = "!";
-        alert("背景音乐暂时无法播放，请检查音乐文件链接是否可访问，或手机浏览器是否拦截播放。");
+        alert("背景音乐暂时无法播放，可能是网易云版权、地区限制，或手机浏览器拦截了音频直链。");
       }
     }
 
@@ -1599,8 +1596,8 @@
       bgmToggle.textContent = "!";
     });
 
-    loadBgmFromSupabase();
-
+      return true;
+    }
     // ===============================
     // 5. 心情日历打卡
     // ===============================
