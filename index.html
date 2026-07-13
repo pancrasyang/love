@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- version: v12 | 新增网易云背景音乐小播放器 -->
+<!-- version: v13 | 基于 v12 新增情书密码页入口 -->
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
@@ -625,31 +625,6 @@
       margin: 0;
     }
 
-    .large-native-player {
-      grid-template-columns: 230px 1fr;
-      padding: clamp(24px, 4vw, 36px);
-    }
-
-    .large-native-player .native-cover-wrap {
-      width: 230px;
-      height: 230px;
-    }
-
-    .large-native-player .native-cover {
-      width: 198px;
-      height: 198px;
-      border-radius: 34px;
-    }
-
-    .large-native-player .native-vinyl {
-      width: 156px;
-      height: 156px;
-    }
-
-    .large-native-player .native-main h3 {
-      font-size: clamp(30px, 5vw, 48px);
-    }
-
     .checkin-layout {
       display: grid;
       grid-template-columns: 0.92fr 1.08fr;
@@ -1191,7 +1166,7 @@
           平凡生活因为你，变得像一颗慢慢融化的草莓糖。
         </p>
         <div class="hero-actions">
-          <button class="primary" onclick="openLetter()">打开一封情书</button>
+          <a class="link-button primary" href="letter.html" target="_blank" rel="noreferrer">打开一封情书</a>
           <button class="secondary" onclick="throwHearts()">撒一把小心心</button>
         </div>
       </div>
@@ -1557,6 +1532,9 @@
         return false;
       }
 
+      return true;
+    }
+
     // ===============================
     // 4. 背景音乐播放器
     // ===============================
@@ -1596,8 +1574,6 @@
       bgmToggle.textContent = "!";
     });
 
-      return true;
-    }
     // ===============================
     // 5. 心情日历打卡
     // ===============================
