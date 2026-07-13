@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<!-- version: v1 | 情书密码页 -->
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>一封只给你的情书</title>
+
+  <style>
+    :root {
+      --pink: #ff7aa2;
+      --rose: #ff4f86;
+      --orange: #ff9a7b;
+      --text: #4a2b35;
+      --muted: #8d6571;
+      --card: rgba(255, 255, 255, 0.78);
+      --shadow: 0 24px 70px rgba(255, 79, 134, 0.22);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 18% 12%, rgba(255, 154, 188, 0.55), transparent 28%),
+        radial-gradient(circle at 82% 18%, rgba(255, 218, 185, 0.78), transparent 30%),
+        linear-gradient(135deg, #fff4f8 0%, #fff7ed 48%, #ffe1ec 100%);
+      overflow-x: hidden;
+    }
+
+    .floating-hearts {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 0;
+    }
+
+    .heart {
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      background: var(--pink);
+      transform: rotate(45deg);
+      opacity: 0.42;
+      animation: floatUp linear infinite;
+    }
+
+    .heart::before,
+    .heart::after {
+      content: "";
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      background: inherit;
+      border-radius: 50%;
+    }
+
+    .heart::before {
+      left: -8px;
+      top: 0;
+    }
+
+    .heart::after {
+      left: 0;
+      top: -8px;
+    }
+
+    @keyframes floatUp {
+      0% {
+        transform: translateY(110vh) rotate(45deg) scale(0.65);
+      }
+      100% {
+        transform: translateY(-15vh) rotate(45deg) scale(1.15);
+      }
+    }
+
+    .page {
+      position: relative;
+      z-index: 1;
+      width: min(900px, calc(100% - 32px));
+      min-height: 100vh;
+      margin: 0 auto;
+      padding: 42px 0;
+      display: grid;
+      place-items: center;
+    }
+
+    .glass {
+      background: var(--card);
+      backdrop-filter: blur(18px);
+      border: 1px solid rgba(255, 255, 255, 0.74);
+      box-shadow: var(--shadow);
+      border-radius: 34px;
+    }
+
+    .password-card,
+    .letter-card {
+      width: min(680px, 100%);
+      padding: clamp(28px, 5vw, 54px);
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 16px;
+      border-radius: 999px;
+      background: rgba(255, 122, 162, 0.16);
+      color: var(--rose);
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      font-size: 14px;
+    }
+
+    h1 {
+      margin: 22px 0 12px;
+      font-size: clamp(34px, 7vw, 62px);
+      line-height: 1;
+      letter-spacing: -0.06em;
+    }
+
+    h1 span {
+      color: var(--rose);
+    }
+
+    p {
+      color: var(--muted);
+      line-height: 1.9;
+      margin: 0;
+    }
+
+    .password-form {
+      display: grid;
+      gap: 14px;
+      margin-top: 28px;
+    }
+
+    input {
+      width: 100%;
+      border: 1px solid rgba(255, 122, 162, 0.22);
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--text);
+      border-radius: 20px;
+      padding: 15px 17px;
+      font: inherit;
+      text-align: center;
+      letter-spacing: 0.24em;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    input:focus {
+      border-color: rgba(255, 79, 134, 0.7);
+      box-shadow: 0 0 0 4px rgba(255, 122, 162, 0.14);
+    }
+
+    button,
+    .link-button {
+      border: 0;
+      cursor: pointer;
+      border-radius: 999px;
+      padding: 13px 22px;
+      font-size: 15px;
+      font-weight: 900;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    button:hover,
+    .link-button:hover {
+      transform: translateY(-3px);
+    }
+
+    .primary {
+      color: white;
+      background: linear-gradient(135deg, #ff4f86, #ff9a7b);
+      box-shadow: 0 14px 30px rgba(255, 79, 134, 0.28);
+    }
+
+    .secondary {
+      color: var(--rose);
+      background: white;
+      box-shadow: 0 12px 28px rgba(255, 122, 162, 0.14);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 24px;
+    }
+
+    .error {
+      min-height: 24px;
+      color: #b42346;
+      font-weight: 800;
+      font-size: 14px;
+    }
+
+    .letter-card {
+      display: none;
+      text-align: left;
+    }
+
+    .letter-card.show {
+      display: block;
+      animation: pop 0.35s ease both;
+    }
+
+    .password-card.hide {
+      display: none;
+    }
+
+    @keyframes pop {
+      from {
+        opacity: 0;
+        transform: scale(0.96) translateY(12px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    .letter-card h1 {
+      text-align: center;
+    }
+
+    .letter-content {
+      margin-top: 24px;
+      padding: clamp(20px, 4vw, 32px);
+      border-radius: 28px;
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid rgba(255, 122, 162, 0.18);
+      color: var(--muted);
+      line-height: 2;
+      font-size: 17px;
+      white-space: pre-wrap;
+    }
+
+    .hint {
+      margin-top: 16px;
+      font-size: 13px;
+    }
+
+    @media (max-width: 560px) {
+      .page {
+        padding: 28px 0;
+      }
+
+      .password-card,
+      .letter-card {
+        border-radius: 28px;
+      }
+
+      input {
+        letter-spacing: 0.18em;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="floating-hearts" id="hearts"></div>
+
+  <main class="page">
+    <section class="password-card glass" id="passwordCard">
+      <div class="badge">💌 Secret Letter</div>
+      <h1>这里藏着一封<br /><span>只给你的情书</span></h1>
+      <p>输入我们的专属密码，就可以打开这个小小的秘密窗口。</p>
+
+      <form class="password-form" onsubmit="unlockLetter(event)">
+        <input
+          id="passwordInput"
+          type="password"
+          inputmode="numeric"
+          autocomplete="off"
+          placeholder="请输入密码"
+          maxlength="12"
+        />
+        <button class="primary" type="submit">打开情书</button>
+        <div class="error" id="passwordError"></div>
+      </form>
+
+      <div class="actions">
+        <a class="link-button secondary" href="index.html">回到恋爱日常</a>
+      </div>
+
+      <p class="hint">密码已写死为你指定的专属密码。</p>
+    </section>
+
+    <section class="letter-card glass" id="letterCard">
+      <div class="badge">💗 For You</div>
+      <h1>一封写给你的<span>情书</span></h1>
+
+      <div class="letter-content" id="letterContent">这里先留给之后要展示的内容。
+
+你把正式内容发给我以后，我会把这里替换成真正的情书、照片回忆、纪念日文字，或者你想放进去的任何内容。</div>
+
+      <div class="actions">
+        <a class="link-button secondary" href="index.html">回到恋爱日常</a>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const LETTER_PASSWORD = "0714";
+
+    function unlockLetter(event) {
+      event.preventDefault();
+
+      const input = document.getElementById("passwordInput");
+      const error = document.getElementById("passwordError");
+      const passwordCard = document.getElementById("passwordCard");
+      const letterCard = document.getElementById("letterCard");
+
+      if (input.value.trim() !== LETTER_PASSWORD) {
+        error.textContent = "密码不对哦，再想想看。";
+        input.select();
+        return;
+      }
+
+      error.textContent = "";
+      passwordCard.classList.add("hide");
+      letterCard.classList.add("show");
+      throwHearts();
+    }
+
+    const hearts = document.getElementById("hearts");
+
+    function createHeart(custom = false) {
+      const heart = document.createElement("div");
+      heart.className = "heart";
+      const size = custom ? Math.random() * 22 + 14 : Math.random() * 16 + 8;
+      heart.style.width = size + "px";
+      heart.style.height = size + "px";
+      heart.style.left = Math.random() * 100 + "vw";
+      heart.style.animationDuration = Math.random() * 7 + 7 + "s";
+      heart.style.animationDelay = custom ? "0s" : Math.random() * 8 + "s";
+      heart.style.background = Math.random() > 0.5 ? "#ff7aa2" : "#ffb3c7";
+      hearts.appendChild(heart);
+
+      setTimeout(() => heart.remove(), 15000);
+    }
+
+    function throwHearts() {
+      for (let i = 0; i < 24; i++) {
+        setTimeout(() => createHeart(true), i * 55);
+      }
+    }
+
+    for (let i = 0; i < 24; i++) createHeart();
+  </script>
+</body>
+</html>
