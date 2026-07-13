@@ -1,22 +1,3 @@
 <!DOCTYPE html>
-<!-- version: v4 | 修复密码页面显示问题 -->
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>一封只给你的情书</title>
-<style>
-body{margin:0;min-height:100vh;font-family:"Ma Shan Zheng","KaiTi",sans-serif;background:linear-gradient(135deg,#fff4f8,#fff7ed,#ffe1ec);color:#4a2b35}.page{width:min(700px,calc(100% - 32px));margin:auto;padding:40px 0;display:grid;place-items:center;min-height:100vh}.card{background:#ffffffcc;backdrop-filter:blur(15px);padding:40px;border-radius:32px;box-shadow:0 24px 70px #ff4f8638;width:100%;text-align:center}input{padding:14px;border-radius:20px;border:1px solid #ffd0dd;text-align:center;letter-spacing:.3em;width:90%}button,a{margin-top:18px;padding:13px 24px;border-radius:999px;border:0;background:#ff4f86;color:white;font-weight:bold;text-decoration:none}.letter{display:none;text-align:left}.letter.show{display:block}.envelope{height:120px;background:#ffd6e2;border-radius:18px;position:relative;overflow:hidden;cursor:pointer}.flap{height:70px;background:#ffb8ce;clip-path:polygon(0 0,100% 0,50% 100%);transition:1s}.envelope.open .flap{transform:rotateX(180deg)}.paper{padding:20px}.content{margin-top:20px;line-height:2;font-size:22px;white-space:pre-wrap}.char{display:inline-block;opacity:0;transform:translateY(25px);animation:show .45s forwards}@keyframes show{to{opacity:1;transform:none}}
-</style>
-</head>
-<body>
-<div class="page">
-<section class="card" id="password"><h1>💌 一封只给你的情书</h1><p>请输入密码</p><input id="pwd" type="password"><br><button onclick="unlock()">打开情书</button><p id="err"></p></section>
-<section class="card letter" id="letter"><div class="envelope" id="env" onclick="openEnvelope()"><div class="flap"></div><div class="paper">💗 给最爱的你</div></div><h1>一封写给你的情书</h1><div class="content" id="content"></div></section>
-</div>
-<script>
-const PASSWORD="0714";const text=`哈喽，宝贝：\n\n第一次尝试给你写电子版的信，是不是看了会有不一样的体验呢，哈哈。\n\n最近在忙着装修，工作上事情也比较多，生活的节奏好像也发生了变化，不由得想起那句“若无闲事挂心头，便是人间好时节”。\n\n上个月过生日，收到你的礼物真是太惊喜了，尤其是看着你一个一个从后座把礼物拿出来，眼泪差点都要冒出来，真的很喜欢这个相册，记录着我们的来时路，希望以后这个相册还能一直充实下去。\n\n当然还有那件鸟，很喜欢这个颜色，真的太用心了，爱你！\n\n真希望我们住在一起的那一天早点到来！也希望你能早日收到我给你的惊喜！`;
-function unlock(){const p=document.getElementById('pwd'),card=document.getElementById('password'),letter=document.getElementById('letter');if(p.value===PASSWORD){card.style.display='none';letter.classList.add('show')}else{document.getElementById('err').textContent='密码不正确'}}
-function openEnvelope(){document.getElementById('env').classList.add('open');let c=document.getElementById('content');c.innerHTML='';[...text].forEach((x,i)=>{let s=document.createElement('span');s.className='char';s.style.animationDelay=i*.04+'s';s.textContent=x;c.appendChild(s)})}
-</script>
-</body>
-</html>
+<!-- version: v5 | 放慢逐字情书动画速度 -->
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>一封只给你的情书</title><style>body{margin:0;min-height:100vh;background:#fff1f5;font-family:"Ma Shan Zheng","KaiTi",sans-serif;color:#4a2b35}.page{width:min(700px,calc(100% - 32px));margin:auto;padding:40px 0}.card{background:#ffffffdd;padding:40px;border-radius:32px;text-align:center;box-shadow:0 20px 50px #ff4f8633}.letter{display:none;text-align:left}.letter.show{display:block}.content{font-size:22px;line-height:2;white-space:pre-wrap}.char{display:inline-block;opacity:0;transform:translateY(25px);animation:show .9s forwards}@keyframes show{to{opacity:1;transform:none}}button{padding:13px 25px;border:0;border-radius:999px;background:#ff4f86;color:white}</style></head><body><div class="page"><section class="card" id="password"><h1>💌 一封只给你的情书</h1><p>请输入密码</p><input id="pwd" type="password"><br><br><button onclick="unlock()">打开情书</button><p id="err"></p></section><section class="card letter" id="letter"><div onclick="openEnvelope()" style="cursor:pointer">💌 点击打开信封</div><h1>一封写给你的情书</h1><div class="content" id="content"></div></section></div><script>const PASSWORD="0714";const text=`哈喽，宝贝：\n\n第一次尝试给你写电子版的信，是不是看了会有不一样的体验呢，哈哈。\n\n最近在忙着装修，工作上事情也比较多，生活的节奏好像也发生了变化。\n\n上个月过生日，收到你的礼物真是太惊喜了，真的很喜欢这个相册，记录着我们的来时路，希望以后这个相册还能一直充实下去。\n\n当然还有那件鸟，很喜欢这个颜色，真的太用心了，爱你！\n\n真希望我们住在一起的那一天早点到来！`;function unlock(){if(pwd.value===PASSWORD){password.style.display='none';letter.classList.add('show')}else err.textContent='密码不正确'}function openEnvelope(){content.innerHTML='';[...text].forEach((c,i)=>{let s=document.createElement('span');s.className='char';s.style.animationDelay=i*.08+'s';s.textContent=c;content.appendChild(s)})}</script></body></html>
