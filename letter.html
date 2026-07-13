@@ -1,20 +1,25 @@
 <!DOCTYPE html>
-<!-- version: v8 | 稳定结构版 + 完整情书正文 -->
+<!-- version: v9 | stable rewrite -->
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>一封只给你的情书</title>
-
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&display=swap');
-
-    :root {
-      --rose: #ff4f86;
-      --pink: #ff7aa2;
-      --soft-pink: #ffd6e2;
-      --text: #4a2b35;
-      --muted: #8d6571;
-      --card: rgba(255, 255, 255, 0.84);
-      --shadow: 0 24px 70px rgba(255, 79, 134, 0.22);
-    }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>一封只给你的情书</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;background:linear-gradient(135deg,#fff4f8,#fff7ed,#ffe1ec);color:#4a2b35;font-family:"Ma Shan Zheng","KaiTi",cursive}.page{width:min(720px,100%)}.card{background:#ffffffdf;border-radius:32px;padding:40px;box-shadow:0 24px 70px #ff4f8638;text-align:center}.hide{display:none!important}input{width:100%;padding:15px;border-radius:20px;border:1px solid #ffd0dd;text-align:center;font-size:18px;letter-spacing:.3em}button{margin-top:16px;padding:14px 28px;border:0;border-radius:999px;background:#ff4f86;color:white;font-weight:bold;cursor:pointer}.letter{text-align:center}.envelope{height:220px;background:#ffd6e2;border-radius:24px;display:grid;place-items:center;font-size:32px;cursor:pointer;position:relative;overflow:hidden;box-shadow:0 20px 40px #ff4f8633}.flap{position:absolute;top:0;left:0;width:100%;height:80px;background:#ffb8ce;clip-path:polygon(0 0,100% 0,50% 100%);transition:1s}.open .flap{transform:rotateX(180deg)}.paper{display:none;margin-top:30px;background:#fffdf8;border-radius:20px;padding:30px;text-align:left;font-size:22px;line-height:2}.paper.show{display:block;animation:up .8s}.char{opacity:0;display:inline-block;position:relative;top:20px;animation:show .9s forwards}@keyframes show{to{opacity:1;top:0}}@keyframes up{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
+</style>
+</head>
+<body>
+<div class="page">
+<section class="card" id="login"><h1>💌 一封只给你的情书</h1><p>请输入密码</p><input id="pwd" type="password"><button id="openBtn">打开情书</button><p id="err"></p></section>
+<section class="card letter hide" id="letter"><h1>一封写给你的情书</h1><div class="envelope" id="env"><div class="flap"></div><div>💌 点击打开信封</div></div><article class="paper" id="paper"><h2>哈喽，宝贝：</h2><div id="content"></div></article></section>
+</div>
+<script>
+const password="0714";
+const text=`第一次尝试给你写电子版的信，是不是看了会有不一样的体验呢，哈哈。\n\n最近在忙着装修，工作上事情也比较多，生活的节奏好像也发生了变化，不由得想起那句“若无闲事挂心头，便是人间好时节”。\n\n上个月过生日，收到你的礼物真是太惊喜了，尤其是看着你一个一个从后座把礼物拿出来，眼泪差点都要冒出来，真的很喜欢这个相册，记录着我们的来时路，希望以后这个相册还能一直充实下去。\n\n当然还有那件鸟，很喜欢这个颜色，真的太用心了，爱你！\n\n真希望我们住在一起的那一天早点到来！也希望你能早日收到我给你的惊喜！`;
+const login=document.getElementById('login'),letter=document.getElementById('letter'),env=document.getElementById('env'),paper=document.getElementById('paper'),content=document.getElementById('content');
+document.getElementById('openBtn').onclick=()=>{if(document.getElementById('pwd').value===password){login.classList.add('hide');letter.classList.remove('hide')}else document.getElementById('err').innerText='密码不正确'};
+env.onclick=()=>{env.classList.add('open');paper.classList.add('show');content.innerHTML='';[...text].forEach((c,i)=>{let s=document.createElement('span');s.className='char';s.style.animationDelay=i*.08+'s';s.textContent=c;content.appendChild(s)})};
+</script>
+</body>
+</html>
