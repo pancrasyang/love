@@ -1,12 +1,3 @@
 <!DOCTYPE html>
-<!-- version: v6 | 修复居中布局 -->
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>一封只给你的情书</title>
-<style>
-*{box-sizing:border-box}body{margin:0;min-height:100vh;min-height:100svh;padding:20px;display:grid;place-items:center;background:linear-gradient(135deg,#fff4f8,#fff7ed,#ffe1ec);font-family:"Ma Shan Zheng","KaiTi",cursive;color:#4a2b35}.page{width:min(700px,100%)}.card{background:#ffffffdd;padding:40px;border-radius:32px;box-shadow:0 24px 70px #ff4f8638;text-align:center}.letter{display:none;text-align:left}.letter.show{display:block}input{padding:14px;border-radius:20px;border:1px solid #ffd0dd;text-align:center;letter-spacing:.3em;width:100%}button{margin-top:18px;padding:13px 25px;border:0;border-radius:999px;background:#ff4f86;color:white}.content{font-size:22px;line-height:2;white-space:pre-wrap}.char{display:inline-block;opacity:0;transform:translateY(25px);animation:show .9s forwards}@keyframes show{to{opacity:1;transform:translateY(0)}}.envelope{cursor:pointer;padding:20px;background:#ffd6e2;border-radius:20px;text-align:center;margin-bottom:20px}
-</style></head>
-<body><div class="page"><section class="card" id="password"><h1>💌 一封只给你的情书</h1><p>请输入密码</p><input id="pwd" type="password"><button onclick="unlock()">打开情书</button><p id="err"></p></section><section class="card letter" id="letter"><div class="envelope" id="env" onclick="openEnvelope()">💌 点击打开信封</div><h1>一封写给你的情书</h1><div class="content" id="content"></div></section></div><script>
-const PASSWORD="0714";const text=`哈喽，宝贝：\n\n第一次尝试给你写电子版的信，是不是看了会有不一样的体验呢，哈哈。\n\n最近在忙着装修，工作上事情也比较多，生活的节奏好像也发生了变化。\n\n上个月过生日，收到你的礼物真是太惊喜了，真的很喜欢这个相册，记录着我们的来时路，希望以后这个相册还能一直充实下去。\n\n当然还有那件鸟，很喜欢这个颜色，真的太用心了，爱你！\n\n真希望我们住在一起的那一天早点到来！`;
-function unlock(){const p=document.getElementById('pwd'),a=document.getElementById('password'),b=document.getElementById('letter');if(p.value===PASSWORD){a.style.display='none';b.classList.add('show')}else{document.getElementById('err').textContent='密码不正确'}}function openEnvelope(){const c=document.getElementById('content');c.innerHTML='';[...text].forEach((x,i)=>{let s=document.createElement('span');s.className='char';s.style.animationDelay=i*.08+'s';s.textContent=x;c.appendChild(s)})}
-</script></body></html>
+<!-- version: v7 | 完整情书正文版 -->
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>一封只给你的情书</title><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;background:linear-gradient(135deg,#fff4f8,#fff7ed,#ffe1ec);font-family:"Ma Shan Zheng","KaiTi",cursive;color:#4a2b35}.page{width:min(700px,100%)}.card{background:#ffffffdd;padding:40px;border-radius:32px;box-shadow:0 24
