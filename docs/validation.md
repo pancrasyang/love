@@ -12,6 +12,8 @@ P1—P7 为按阶段通过本地验证后的代码提交，不表示对应生产
 
 ## 连接建立后的生产核查
 
-Supabase 已成功应用 001/002 新表迁移，未触碰现有记录与其权限。数据基线：daily 14 条/14 张图，spot 1 条/1 张图；Storage 15 个 JPEG，总 33,696,318 字节，最大 5,700,846 字节；无 Auth 用户。追加 006 保护旧地点数据，并将照片脚本扩展到该记录。Vercel 原团队访问 403，当前连接无可见团队；GitHub 返回升级提交的 Vercel 自动构建成功。
+Supabase 已成功应用 001/002 新表迁移，未触碰现有记录与其权限。数据基线：daily 14 条/14 张图，spot 1 条/1 张图；Storage 15 个 JPEG，总 33,696,318 字节，最大 5,700,846 字节。追加 006 保护旧地点数据，并将照片脚本扩展到该记录。
 
 新表建立后复核：profiles/mood_records 对 anon 的 SELECT 权限为 false；daily 与 spot 全表校验和与核查前完全一致，Storage 对象数仍为 15。
+
+后续核查：两个 Auth 用户已创建且邮箱已确认，profiles 恰有 pengpeng / kaikai 两行。Vercel 带团队参数请求 403，但按项目 ID 直接访问成功。已创建并复核 Production / Preview 的 SUPABASE_URL、SUPABASE_PUBLISHABLE_KEY、PENGPENG_EMAIL、KAIKAI_EMAIL；邮箱映射为 sensitive，无账号密码配置。升级分支提交 `8b3e45ef34c5110fc8ffb191f614fcff8ac82d5b` 重新部署为 Preview，`dpl_5eaBawDb966dH1s1nk84M5MWanuZ` 状态 READY、target 为 null。构建成功不等于真实账号或浏览器验收通过。

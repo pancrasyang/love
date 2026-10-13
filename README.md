@@ -125,5 +125,5 @@ node scripts/migrate-photos.mjs --apply
 
 ## 生产进度（2026-10-13）
 
-已通过 Supabase 连接核实 schema、权限和数据基线，成功应用 `love_v2_profiles` 与 `love_v2_moods` 两个迁移。续作从 003 开始，不能重跑 001/002。现有 daily_checkins/spot_checkins/Storage 未改动。Auth 用户数为 0，需先明确两人的邮箱并创建账号。
-Vercel 插件已安装但访问原团队 `pengpengkk-s-projects1` 返回 403，可见团队列表为空；GitHub 提交的 Vercel 自动预览构建状态为 success，尚无法管理其配置。
+已通过 Supabase 连接核实 schema、权限和数据基线，成功应用 `love_v2_profiles` 与 `love_v2_moods` 两个迁移。续作从 003 开始，不能重跑 001/002。现有 daily_checkins/spot_checkins/Storage 未改动。两个 Auth 用户已创建、确认邮箱，并绑定 profiles 的 pengpeng / kaikai 角色；实际登录尚待验收。
+Vercel 显式团队参数请求返回 403，但直接通过项目 ID 可正常访问原 love 项目。已配置并复核 Production / Preview 的四项服务端登录环境变量；邮箱映射使用 sensitive 类型，无密码写入。升级分支原提交已重新构建为 Preview，部署 `dpl_5eaBawDb966dH1s1nk84M5MWanuZ` 为 READY，main 和生产域名未切换。Cloudflare 部署与历史照片迁移尚待执行。
