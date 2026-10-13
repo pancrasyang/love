@@ -8,6 +8,7 @@ async function loadDailyCheckins(){
   if(error){$('dailyList').innerHTML='<div class="empty">记录加载失败，请稍后刷新。</div>';return;}
   rows.push(...data);if(data.length<200)break;
  }
+ if(JSON.stringify(rows)===JSON.stringify(dailyRecords)&&$('dailyList').querySelector('.check-card,.empty'))return;
  dailyRecords=rows;renderDailyCheckins(rows);syncRightRecordPanelsOnly();
  await hydratePrivatePhotos(); if(isCurrent(epoch))cleanupOrphanPhotos();
 }

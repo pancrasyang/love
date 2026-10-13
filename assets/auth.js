@@ -10,7 +10,7 @@ function clearPrivateView(){
  authEpoch++;
  currentProfile=null; profileList=[];
  $('privateApp').hidden=true; $('authGate').hidden=false;
- $('dailyList').replaceChildren();
+ $('dailyList').replaceChildren(); $('retryLogout').hidden=true;
  $('dailyForm').reset(); $('dailyPreview').removeAttribute('src'); $('dailyPreview').classList.remove('show');
  $('moodCalendarGrid').replaceChildren(); $('moodTodayNote').textContent='';
  closeMoodPopover(); closeLetter();
@@ -61,9 +61,10 @@ $('passwordForm').addEventListener('submit',async event=>{
  finally{button.disabled=false;$('loginPassword').value='';}
 });
 // Do not await SDK operations inside onAuthStateChange's lock.
-authSubscription=sb.auth.onAuthStateChange((event)=>{
+authSubscription=sb.auth.onAuthStateChange((event,session)=>{
  if(event==='SIGNED_OUT'){clearPrivateView();showRoleChoices();}
- else if(event==='TOKEN_REFRESHED')setTimeout(restoreSession,0);
+ else if(event==='SIGNED_IN'&&session?.user.id!==currentProfile?.id){clearPrivateView();setTimeout(restoreSession,0);}
+ else if(event==='TOKEN_REFRESHED'||event==='USER_UPDATED')setTimeout(restoreSession,0);
 });
 window.loadPrivateData=async()=>{renderTodayMood();renderMoodCalendar();await loadDailyCheckins();};
 window.addEventListener('focus',()=>{if(currentProfile)restoreSession();});

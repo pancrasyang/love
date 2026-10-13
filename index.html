@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- version: v13 | 基于 v12 新增情书密码页入口 -->
+<!-- version: V2.0 | 双账号、云端心情、私人照片 -->
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
@@ -312,17 +312,6 @@
       margin: 6px 0 0;
     }
 
-    .playlist {
-      padding: 32px;
-    }
-
-    .music-desc {
-      margin: -4px 0 16px;
-      color: var(--muted);
-      line-height: 1.8;
-      font-size: 15px;
-    }
-
     .top-dashboard {
       align-items: stretch;
     }
@@ -345,8 +334,7 @@
       position: relative;
     }
 
-    .mood-head,
-    .music-section-head {
+    .mood-head {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
@@ -361,8 +349,7 @@
       font-size: 14px;
     }
 
-    .mood-today-badge,
-    .music-section-badge {
+    .mood-today-badge {
       flex: 0 0 auto;
       padding: 9px 13px;
       border-radius: 999px;
@@ -611,18 +598,6 @@
 
     .mood-popover.no-record #moodDeleteButton {
       display: none;
-    }
-
-    .music-section {
-      padding: clamp(26px, 4vw, 42px);
-    }
-
-    .music-section .section-title {
-      margin-bottom: 8px;
-    }
-
-    .music-section .music-desc {
-      margin: 0;
     }
 
     .checkin-layout {
@@ -910,86 +885,6 @@
       line-height: 1.8;
     }
 
-    .bgm-player {
-      position: fixed;
-      right: 18px;
-      bottom: 18px;
-      z-index: 9;
-      display: grid;
-      grid-template-columns: 46px minmax(0, 1fr) 44px;
-      gap: 10px;
-      align-items: center;
-      width: min(330px, calc(100vw - 32px));
-      padding: 10px 12px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.76);
-      box-shadow: 0 18px 46px rgba(255, 79, 134, 0.2);
-    }
-
-    .bgm-disc {
-      width: 46px;
-      height: 46px;
-      display: grid;
-      place-items: center;
-      border-radius: 50%;
-      color: white;
-      font-weight: 1000;
-      background:
-        radial-gradient(circle, rgba(255,255,255,0.95) 0 6px, rgba(255,122,162,0.95) 7px 16px, rgba(74,43,53,0.9) 17px 100%);
-      box-shadow: 0 10px 24px rgba(255, 79, 134, 0.2);
-    }
-
-    .bgm-player.playing .bgm-disc {
-      animation: bgmSpin 4.8s linear infinite;
-    }
-
-    @keyframes bgmSpin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-
-    .bgm-info {
-      min-width: 0;
-      line-height: 1.25;
-    }
-
-    .bgm-info strong {
-      display: block;
-      color: var(--text);
-      font-size: 14px;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-
-    .bgm-info span {
-      display: block;
-      margin-top: 3px;
-      color: var(--muted);
-      font-size: 12px;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-
-    .bgm-toggle {
-      width: 44px;
-      height: 44px;
-      padding: 0;
-      border-radius: 50%;
-      color: white;
-      background: linear-gradient(135deg, var(--rose), var(--orange));
-      box-shadow: 0 10px 24px rgba(255, 79, 134, 0.24);
-      display: grid;
-      place-items: center;
-      font-size: 16px;
-    }
-
-    .bgm-player.error .bgm-disc {
-      background:
-        radial-gradient(circle, rgba(255,255,255,0.95) 0 6px, rgba(180,35,70,0.85) 7px 16px, rgba(74,43,53,0.9) 17px 100%);
-    }
-
     .modal {
       position: fixed;
       inset: 0;
@@ -1062,8 +957,7 @@
         max-height: 680px;
       }
 
-      .mood-head,
-      .music-section-head {
+      .mood-head {
         display: grid;
       }
 
@@ -1087,13 +981,6 @@
 
       .timeline-item:not(:last-child)::after {
         left: 36px;
-      }
-
-      .bgm-player {
-        left: 16px;
-        right: 16px;
-        bottom: 14px;
-        width: auto;
       }
 
       .mood-checkin {
@@ -1139,23 +1026,6 @@
 
 <body>
   <div class="floating-hearts" id="hearts"></div>
-
-  <div class="bgm-player glass" id="bgmPlayer">
-    <div class="bgm-disc" id="bgmDisc">♪</div>
-    <div class="bgm-info">
-      <strong>背景音乐</strong>
-      <span>网易云音乐 · 28232266</span>
-    </div>
-    <button type="button" class="bgm-toggle" id="bgmToggle" onclick="toggleBgm()" aria-label="播放或暂停背景音乐">
-      ▶
-    </button>
-    <audio
-      id="bgmAudio"
-      preload="metadata"
-      loop
-      src="https://music.163.com/song/media/outer/url?id=28232266.mp3">
-    </audio>
-  </div>
 
   <section id="authGate" class="auth-gate glass" aria-labelledby="authTitle">
     <div class="badge">💗 Love Diary</div><h1 id="authTitle">欢迎回到<br>我们的小日常</h1>
@@ -1397,7 +1267,7 @@
     // Legacy Supabase photos remain readable during migration.
 
     // 把这里改成你们真正的在一起日期，例如 "2024-05-20T00:00:00"
-    const startDate = new Date("2025-09-14T00:00:00");
+    const startDate = new Date("2025-09-14T00:00:00+08:00");
 
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -1505,45 +1375,6 @@
 
       return true;
     }
-
-    // ===============================
-    // 4. 背景音乐播放器
-    // ===============================
-
-    const bgmAudio = document.getElementById("bgmAudio");
-    const bgmPlayer = document.getElementById("bgmPlayer");
-    const bgmToggle = document.getElementById("bgmToggle");
-
-    async function toggleBgm() {
-      try {
-        if (bgmAudio.paused) {
-          await bgmAudio.play();
-        } else {
-          bgmAudio.pause();
-        }
-      } catch (error) {
-        bgmPlayer.classList.add("error");
-        bgmToggle.textContent = "!";
-        alert("背景音乐暂时无法播放，可能是网易云版权、地区限制，或手机浏览器拦截了音频直链。");
-      }
-    }
-
-    bgmAudio.addEventListener("play", () => {
-      bgmPlayer.classList.add("playing");
-      bgmPlayer.classList.remove("error");
-      bgmToggle.textContent = "⏸";
-    });
-
-    bgmAudio.addEventListener("pause", () => {
-      bgmPlayer.classList.remove("playing");
-      bgmToggle.textContent = "▶";
-    });
-
-    bgmAudio.addEventListener("error", () => {
-      bgmPlayer.classList.add("error");
-      bgmPlayer.classList.remove("playing");
-      bgmToggle.textContent = "!";
-    });
 
     // ===============================
     // 5. 心情日历打卡

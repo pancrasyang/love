@@ -10,7 +10,8 @@ async function mediaFetch(path,options={},epoch=authEpoch){
   if(!isCurrent(epoch))throw Error('登录状态已改变');
   if(!response.ok){const body=await response.json().catch(()=>({}));throw Error(body.error||'照片请求失败');}
   // Read body while the controller remains registered, including large downloads.
-  return options.method==='DELETE'?null:options.method==='POST'?await response.json():await response.blob();
+  const result=options.method==='DELETE'?null:options.method==='POST'?await response.json():await response.blob();
+  if(!isCurrent(epoch))throw Error('登录状态已改变');return result;
  }finally{mediaRequests.delete(controller);}
 }
 async function uploadImage(file,recordId){
@@ -23,10 +24,10 @@ function revokeMediaUrls(){mediaUrls.forEach(url=>URL.revokeObjectURL(url));medi
 async function hydratePrivatePhotos(){
  const epoch=authEpoch;
  // Sequential small batches avoid downloading every photo at once.
- const images=[...document.querySelectorAll('img[data-media-key]')];
+ const images=[...document.querySelectorAll('img[data-media-key]:not([src])')];
  async function run(){for(;;){const img=images.shift();if(!img||!isCurrent(epoch))return;
-  try{const blob=await mediaFetch('/api/media/'+encodeURIComponent(img.dataset.mediaKey),{},epoch);if(!isCurrent(epoch)||!img.isConnected)continue;const url=URL.createObjectURL(blob);mediaUrls.add(url);img.src=url;img.nextElementSibling?.remove();}
-  catch{if(isCurrent(epoch)&&img.isConnected){img.alt='照片暂时无法加载';const button=document.createElement('button');button.type='button';button.className='ghost small-button';button.textContent='重试照片';button.onclick=()=>{button.remove();hydratePrivatePhotos();};if(!img.nextElementSibling?.matches('button'))img.after(button);}}
+  try{const blob=await mediaFetch('/api/media/'+encodeURIComponent(img.dataset.mediaKey),{},epoch);if(!isCurrent(epoch)||!img.isConnected)continue;const url=URL.createObjectURL(blob);mediaUrls.add(url);img.src=url;if(img.nextElementSibling?.classList.contains('photo-retry'))img.nextElementSibling.remove();}
+  catch{if(isCurrent(epoch)&&img.isConnected){img.alt='照片暂时无法加载';const button=document.createElement('button');button.type='button';button.className='ghost small-button photo-retry';button.textContent='重试照片';button.onclick=()=>{button.remove();hydratePrivatePhotos();};if(!img.nextElementSibling?.matches('button'))img.after(button);}}
  }}await Promise.all([run(),run(),run()]);
 }
 let cleanedFor=null;

@@ -1,18 +1,18 @@
 // V2 deliberately leaves loveDailyMoodRecordsV1 untouched (user requested no migration).
 const moodMap={happy:{icon:'😊',label:'开心'},sweet:{icon:'💗',label:'超甜'},miss:{icon:'🥺',label:'想你'},calm:{icon:'🌙',label:'平静'},tired:{icon:'😴',label:'疲惫'},sad:{icon:'🌧️',label:'低落'}};
-let moodRecords=[],selectedMood=null,selectedMoodDateKey=null,moodLoading=false;
+let moodRecords=[],selectedMood=null,selectedMoodDateKey=null,moodLoading=false,moodRequest=0;
 function getMoodDateKey(date=new Date()){return new Date(date.getTime()+8*3600000).toISOString().slice(0,10);}
 let moodViewMonth=getMoodDateKey().slice(0,7);
 function nameOf(id){return profileList.find(p=>p.id===id)?.display_name||'历史记录';}
 function recordsOn(date){return moodRecords.filter(r=>r.date===date).sort((a,b)=>nameOf(a.user_id).localeCompare(nameOf(b.user_id)));}
 function myMood(date){return moodRecords.find(r=>r.date===date&&r.user_id===currentProfile?.id);}
 async function loadMoods(){
- if(!currentProfile)return;const epoch=authEpoch;
+ if(!currentProfile)return;const epoch=authEpoch,request=++moodRequest;
  const start=moodViewMonth+'-01';const d=new Date(start+'T12:00:00Z');d.setUTCMonth(d.getUTCMonth()+1);const end=d.toISOString().slice(0,10);
  // Month query + today's records keeps requests bounded even after many years.
  const today=getMoodDateKey();
  const {data,error}=await sb.from('mood_records').select('*').or(`and(date.gte.${start},date.lt.${end}),date.eq.${today}`);
- if(!isCurrent(epoch))return;
+ if(!isCurrent(epoch)||request!==moodRequest)return;
  if(error){$('moodSyncStatus').textContent='心情加载失败，请点击刷新重试。';return;}
  moodRecords=data||[];$('moodSyncStatus').textContent='北京时间 · 双方心情自动同步';renderTodayMood();renderMoodCalendar();
 }
@@ -70,5 +70,5 @@ document.querySelectorAll('.mood-option').forEach(button=>button.addEventListene
 $('moodPopover').addEventListener('click',e=>{if(e.target===$('moodPopover'))closeMoodPopover();});
 $('refreshMoods').addEventListener('click',loadMoods);
 window.loadPrivateData=async()=>{await Promise.all([loadDailyCheckins(),loadMoods()]);};
-window.clearPrivateData=()=>{moodRecords=[];$('moodViewBox').replaceChildren();$('moodNoteInput').value='';$('moodTodayText').textContent='';$('moodTodayIcon').textContent='♡';};
+window.clearPrivateData=()=>{moodRecords=[];moodRequest++;$('moodViewBox').replaceChildren();$('moodNoteInput').value='';$('moodTodayText').textContent='';$('moodTodayIcon').textContent='♡';};
 setInterval(()=>{if(currentProfile&&!document.hidden)loadPrivateData();},30000);

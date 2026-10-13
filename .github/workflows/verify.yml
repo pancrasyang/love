@@ -1,0 +1,20 @@
+name: Verify love diary
+on:
+  push:
+    branches: [main, upgrade/v2]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: node scripts/check.mjs
+      - run: npm test
+      - run: node scripts/build.mjs
