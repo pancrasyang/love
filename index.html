@@ -1303,7 +1303,7 @@
           <form id="dailyForm">
             <label>
               今日文字
-              <textarea id="dailyText" placeholder="例如：今天一起吃了火锅，回来的路上风很温柔。" required></textarea>
+              <textarea id="dailyText" maxlength="10000" placeholder="例如：今天一起吃了火锅，回来的路上风很温柔。" required></textarea>
             </label>
 
             <label>
@@ -1318,7 +1318,7 @@
 
             <div class="form-actions">
               <button id="dailySubmitBtn" type="submit" class="primary">在线发布日常打卡</button>
-              <button type="button" class="ghost" onclick="resetDailyForm()">清空表单</button>
+              <button type="button" class="ghost" onclick="resetDailyForm()">取消 / 清空</button>
             </div>
           </form>
         </div>
@@ -1429,7 +1429,8 @@
         month: "2-digit",
         day: "2-digit",
         hour: "2-digit",
-        minute: "2-digit"
+        minute: "2-digit",
+        timeZone: "Asia/Shanghai"
       }).format(new Date(dateString));
     }
 
@@ -1599,129 +1600,7 @@
     // 7. 在线保存：日常打卡
     // ===============================
 
-    async function loadDailyCheckins() {
-      if (!currentProfile) return;
-      const epoch = authEpoch;
-      const list = document.getElementById("dailyList");
-      list.innerHTML = `<div class="loading">正在加载日常记录...</div>`;
-
-      const { data, error } = await sb
-        .from("daily_checkins")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        list.innerHTML = `<div class="empty">加载失败：${escapeHtml(error.message)}</div>`;
-        return;
-      }
-
-      if (!isCurrent(epoch)) return;
-      renderDailyCheckins(data || []);
-      syncRightRecordPanelsOnly();
-    }
-
-    function renderDailyCheckins(checkins) {
-      const list = document.getElementById("dailyList");
-
-      if (!checkins.length) {
-        list.innerHTML = `<div class="empty">还没有日常打卡。<br />写下今天第一句想记录的话吧。</div>`;
-        return;
-      }
-
-      list.innerHTML = checkins.map((item) => {
-        const photoHtml = item.photo_url
-          ? `<img src="${item.photo_url}" alt="日常打卡照片" />`
-          : "";
-
-        return `
-          <article class="check-card">
-            ${photoHtml}
-            <div class="check-body">
-              <div class="meta-row">
-                <span class="tag">📝 日常打卡</span>
-                <span>⏰ ${formatDateTime(item.created_at)}</span>
-              </div>
-              <p>${escapeHtml(item.content)}</p>
-              <div class="card-actions">
-                <button class="danger small-button" onclick="deleteDailyCheckin('${item.id}', '${escapeHtml(item.photo_path || "")}')">删除</button>
-              </div>
-            </div>
-          </article>
-        `;
-      }).join("");
-    }
-
-    document.getElementById("dailyForm").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      if (!checkSupabaseConfig()) return;
-
-      const submitBtn = document.getElementById("dailySubmitBtn");
-      const text = document.getElementById("dailyText").value.trim();
-      const photoFile = document.getElementById("dailyPhoto").files[0];
-
-      if (!text) {
-        alert("请先写一点今天的日常。");
-        return;
-      }
-
-      submitBtn.disabled = true;
-      setStatus("dailyStatus", "正在上传照片并保存记录...");
-
-      try {
-        const uploaded = await uploadImage(photoFile, "daily-checkins");
-
-        const { error } = await sb
-          .from("daily_checkins")
-          .insert({
-            content: text,
-            photo_url: uploaded.url,
-            photo_path: uploaded.path
-          });
-
-        if (error) throw error;
-
-        resetDailyForm();
-        await loadDailyCheckins();
-        setStatus("dailyStatus", "发布成功。");
-        setTimeout(() => setStatus("dailyStatus", ""), 2200);
-        throwHearts();
-      } catch (error) {
-        console.error(error);
-        setStatus("dailyStatus", `保存失败：${error.message || "请检查 Supabase 配置和 RLS/Storage 权限。"}`);
-      } finally {
-        submitBtn.disabled = false;
-        syncRightRecordPanelsOnly();
-      }
-    });
-
-    function resetDailyForm() {
-      document.getElementById("dailyForm").reset();
-
-      const preview = document.getElementById("dailyPreview");
-      preview.removeAttribute("src");
-      preview.classList.remove("show");
-      syncRightRecordPanelsOnly();
-    }
-
-    async function deleteDailyCheckin(id, photoPath) {
-      if (!checkSupabaseConfig()) return;
-      if (!confirm("确定要删除这条日常打卡吗？")) return;
-
-      try {
-        await removeImage(photoPath);
-
-        const { error } = await sb
-          .from("daily_checkins")
-          .delete()
-          .eq("id", id);
-
-        if (error) throw error;
-
-        await loadDailyCheckins();
-      } catch (error) {
-        alert(`删除失败：${error.message || "请检查删除权限。"}`);
-      }
-    }
+    // Authenticated daily behavior lives in assets/daily.js.
 
     // ===============================
     // 8. 原来的互动效果
@@ -1775,5 +1654,6 @@
   </script>
   <script src="assets/auth.js"></script>
   <script src="assets/moods.js"></script>
+  <script src="assets/daily.js"></script>
 </body>
 </html>
