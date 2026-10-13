@@ -1,6 +1,6 @@
 import {inspectImage,MAX_BYTES} from './image-type.mjs';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const KEY=/^daily\/[0-9a-f-]{36}\/(?:[0-9a-f-]{36}|legacy)\/[a-f0-9-]+\.(?:jpg|png|webp)$/;
+const KEY=/^(?:daily|spot)\/[0-9a-f-]{36}\/(?:[0-9a-f-]{36}|legacy)\/[a-f0-9-]+\.(?:jpg|png|webp)$/;
 class HttpError extends Error{constructor(status,message){super(message);this.status=status;}}
 async function limitedBody(request){
  if(Number(request.headers.get('content-length'))>MAX_BYTES)throw new HttpError(413,'图片不能超过 10MB');

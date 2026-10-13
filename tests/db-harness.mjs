@@ -7,6 +7,7 @@ export async function database(migrations){
  insert into auth.users values ('${A}'),('${B}'),('${C}');insert into auth.sessions values ('${A}','${A}'),('${B}','${B}'),('${C}','${C}');
  create table public.daily_checkins(id uuid primary key default gen_random_uuid(),content text not null,photo_url text,photo_path text,created_at timestamptz default now());
  insert into daily_checkins(content,photo_url,photo_path) values ('legacy','https://legacy.invalid/photo.jpg','daily-checkins/old.jpg');
+ create table public.spot_checkins(id uuid primary key default gen_random_uuid(),spot_name text,photo_url text,photo_path text,created_at timestamptz default now());insert into spot_checkins(spot_name,photo_path) values('historical spot','spot-checkins/old.jpg');grant all on spot_checkins to anon,authenticated;alter table spot_checkins enable row level security;create policy old_spot on spot_checkins for all using(true) with check(true);
  grant all on public.daily_checkins to anon,authenticated;alter table daily_checkins enable row level security;create policy old_public on daily_checkins for all using(true) with check(true);`);
  for(const file of migrations)await db.exec(readFileSync('supabase/migrations/'+file,'utf8'));
  await db.exec(`insert into profiles(id,role) values('${A}','pengpeng'),('${B}','kaikai');`);

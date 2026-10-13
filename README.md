@@ -3,7 +3,7 @@
 保留原生 HTML/CSS/JavaScript、现有粉色卡片布局、手机断点和情书原文件。
 新增双账号登录、云端双人心情、作者权限、私有 R2 照片；删除背景音乐。
 
-**当前状态：代码与本地测试完成，生产配置、真实双账号验收和历史照片实际迁移尚未执行。请勿在完成以下顺序前合并到生产 main。**
+**当前状态：代码与本地测试完成，生产已建立 profiles / mood_records；现有表权限切换、真实双账号验收和历史照片实际迁移尚未执行。请勿在完成以下顺序前合并到生产 main。**
 用户已明确：旧心情不迁移。本地 `loveDailyMoodRecordsV1` 保留但不读取、不上传、不删除。
 
 ## 本地验证
@@ -28,7 +28,7 @@ node scripts/build.mjs
    现有字段应包含 id/content/created_at/photo_url/photo_path。存在额外触发器时先审查其兼容性。
 2. 在 Supabase Authentication 创建或确认两个 Email + Password 用户，邮箱和密码分别独立。
    关闭 Allow new users to sign up，不启用匿名登录。在 Auth 用户列表取得对应 UUID。
-3. 在维护窗口依次执行 `supabase/migrations/001_profiles.sql` 至 `005_hardening.sql`。
+3. 在维护窗口依次执行 `supabase/migrations/001_profiles.sql` 至 `006_legacy_spots.sql`。
    每个文件独立事务；失败会回滚该文件，先处理错误再继续。不要重复执行已成功的建表文件。
    没有删表、清空记录或猜测旧作者；历史 `author_id` 保持 NULL。
 4. 用 SQL 编辑器插入两行 profiles（下方占位符仅在控制台替换），核对 UUID 和角色。
@@ -69,6 +69,8 @@ commit;
 ## 历史照片迁移
 
 仅在可信管理员终端，使用环境变量提供 Supabase 服务端 key 和 R2 迁移凭据。
+实际数据库包含 14 条日常和 1 条旧地点记录，脚本覆盖两表对应的全部 15 张照片。旧地点记录只保留为授权账号可读的历史数据，当前首页不新增地点模块。
+
 这些凭据不用于 Worker：运行时 Worker 使用 R2 Binding 和用户令牌，不需要 R2 Access Key。
 不要把迁移凭据放进 Vercel 前端配置，也不要提交本地报告或任何 `.env`。
 
@@ -120,3 +122,8 @@ node scripts/migrate-photos.mjs --apply
 [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security)、
 [Supabase sessions](https://supabase.com/docs/guides/auth/sessions)、
 [Cloudflare R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/)。
+
+## 生产进度（2026-10-13）
+
+已通过 Supabase 连接核实 schema、权限和数据基线，成功应用 `love_v2_profiles` 与 `love_v2_moods` 两个迁移。续作从 003 开始，不能重跑 001/002。现有 daily_checkins/spot_checkins/Storage 未改动。Auth 用户数为 0，需先明确两人的邮箱并创建账号。
+Vercel 插件已安装但访问原团队 `pengpengkk-s-projects1` 返回 403，可见团队列表为空；GitHub 提交的 Vercel 自动预览构建状态为 success，尚无法管理其配置。

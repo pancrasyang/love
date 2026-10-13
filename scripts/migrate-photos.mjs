@@ -33,11 +33,11 @@ export async function migrate({apply=false,env=process.env,fetcher=fetch,reportP
  if(cfg.endpoint&&(!/^https:\/\/[a-zA-Z0-9]+\.r2\.cloudflarestorage\.com\/?$/.test(cfg.endpoint)))throw Error('Invalid R2 endpoint');
  async function db(path,options={}){const r=await fetcher(base+'/rest/v1/'+path,{...options,headers:{...dbHeaders,'Content-Type':'application/json',...options.headers}});if(!r.ok)throw Error('Database request failed: HTTP '+r.status);const t=await r.text();return t?JSON.parse(t):null;}
  async function object(method,key,body){const signed=signedS3(method,key,body,cfg);const r=await fetcher(signed.url,signed.options);if(!r.ok)throw Error('R2 request failed: HTTP '+r.status);return r;}
- const rows=[];for(let offset=0;;offset+=200){const page=await db(`daily_checkins?select=id,author_id,photo_url,photo_path,photo_key&order=id&offset=${offset}&limit=200`);rows.push(...page);if(page.length<200)break;}
+ const rows=[];for(const table of ['daily_checkins','spot_checkins']){for(let offset=0;;offset+=200){const columns=table==='daily_checkins'?'id,author_id,photo_url,photo_path,photo_key':'id,photo_url,photo_path,photo_key';const page=await db(`${table}?select=${columns}&order=id&offset=${offset}&limit=200`);rows.push(...page.map(row=>({author_id:null,...row,source_table:table,business_type:table==='daily_checkins'?'daily':'spot'})));if(page.length<200)break;}}
  const report={mode:apply?'apply':'dry-run',started_at:new Date().toISOString(),record_count:rows.length,items:[]};
  for(const row of rows){
   if(!row.photo_path&&!row.photo_url&&!row.photo_key)continue;
-  const result={id:row.id};report.items.push(result);
+  const result={id:row.id,source_table:row.source_table};report.items.push(result);
   try{
    if(row.photo_key){
     if(!apply){result.status='already-linked-needs-r2-verification';continue;}
@@ -51,15 +51,15 @@ export async function migrate({apply=false,env=process.env,fetcher=fetch,reportP
    const path=sourcePath(row,base,bucket);
    const source=await fetcher(`${base}/storage/v1/object/authenticated/${encode(bucket)}/${path.split('/').map(encode).join('/')}`,{headers:dbHeaders});if(!source.ok)throw Error('Source download failed: HTTP '+source.status);
    const bytes=new Uint8Array(await source.arrayBuffer()),image=inspectImage(bytes),digest=hash(bytes);
-   const dest=`daily/${row.id}/${row.author_id||'legacy'}/${digest}.${image.ext}`;
+   const dest=`${row.business_type}/${row.id}/${row.author_id||'legacy'}/${digest}.${image.ext}`;
    result.key=dest;result.sha256=digest;result.size=bytes.length;
    if(!apply){result.status='ready';continue;}
    await object('PUT',dest,bytes);
    const copied=new Uint8Array(await(await object('GET',dest)).arrayBuffer());if(hash(copied)!==digest||copied.length!==bytes.length)throw Error('R2 verification mismatch; not linked');
    const existing=await db(`media_objects?key=eq.${encodeURIComponent(dest)}&select=sha256,record_id,owner_id`);
    if(existing.length){if(existing[0].sha256!==digest||existing[0].record_id!==row.id||existing[0].owner_id!==row.author_id)throw Error('Registry conflict');}
-   else await db('media_objects',{method:'POST',body:JSON.stringify({key:dest,record_id:row.id,owner_id:row.author_id,content_type:image.type,size_bytes:bytes.length,sha256:digest})});
-   const linked=await db(`daily_checkins?id=eq.${row.id}&photo_key=is.null`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({photo_key:dest})});
+   else await db('media_objects',{method:'POST',body:JSON.stringify({key:dest,record_id:row.id,business_type:row.business_type,owner_id:row.author_id,content_type:image.type,size_bytes:bytes.length,sha256:digest})});
+   const linked=await db(`${row.source_table}?id=eq.${row.id}&photo_key=is.null`,{method:'PATCH',headers:{Prefer:'return=representation'},body:JSON.stringify({photo_key:dest})});
    if(linked?.length!==1)throw Error('Record changed concurrently; not overwritten');
    result.status='copied-verified-linked';
   }catch(e){result.status='failed';result.error=e.message;}
