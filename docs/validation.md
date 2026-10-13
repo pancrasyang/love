@@ -1,6 +1,6 @@
 # V2 验证记录
 
-2026-10-13。本地 23 项测试通过：登录拒绝/允许、两个角色和会话撤销、心情日期/唯一性/权限、日常作者与旧宽松策略约束、媒体关联/删除、Worker 身份/CORS/类型/大小、迁移校验/试运行、首页身份切换/退出/迟到响应/图片正文保留、Supabase 默认函数权限收紧。
+2026-10-13。本地 25 项测试通过：登录拒绝/允许、两个角色和会话撤销、心情日期/唯一性/权限、日常作者与旧宽松策略约束、媒体关联/删除、Worker 身份/CORS/类型/大小、迁移校验/试运行、首页身份切换/退出/迟到响应/图片正文保留、Supabase 默认函数权限收紧、JPEG 扫描结构/附加数据与上传规范化。
 
 另外通过：所有 JavaScript 语法检查；两个 HTML 结束结构；letter.html 原始 SHA-256；静态输出构建。
 
@@ -25,3 +25,5 @@ Supabase 已成功应用 001/002 新表迁移，未触碰现有记录与其权�
 生产函数 ACL 复核：六个应用函数均无 anon EXECUTE；authenticated 只可执行 is_love_member / begin_media_delete / finish_media_delete，三个入口均校验实时会话，删除额外校验归属及关联。触发器助手对 authenticated 无 EXECUTE，回归确认其业务触发正常。
 Advisor 中匿名 definer 提示已消失；剩余三个 authenticated definer 提示属于有意授权的入口（严格检查实时身份/归属，固定 search_path），参考 [0029 说明](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)。另有未开启[泄露密码保护](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)的提示，未修改 Auth 配置。
 公开注册仍开启（disable_signup=false），需后台关闭。旧照片迁移和旧 Storage 封闭未执行。
+
+真实 JPEG 上传失败已复现：用户原图 178,879 字节、1279×1706 像素，JPEG 图像码流在 178,855 字节处结束，后有 24 字节附加数据。原校验要求 EOI 位于文件末尾，误报非 JPEG。修复后按分段和扫描定位 EOI；原图通过校验，去尾处理前后尺寸和解码像素完全相同。新增测试覆盖渐进扫描、元数据中嵌入 EOI 字节、截断、伪 MIME、R2 实际字节/大小/hash；使用生成纯色图，无用户照片进入公开仓库。完整 25 项测试、语法及原情书 hash 检查通过。远端 Worker 仍需部署本次修复，再执行实际照片验收。

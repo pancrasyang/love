@@ -31,8 +31,10 @@ export default {async fetch(request,env){
   const url=new URL(request.url),path=url.pathname;
   if(path==='/api/media'&&request.method==='POST'){
    const recordId=request.headers.get('X-Record-Id');if(!UUID.test(recordId||''))throw new HttpError(400,'记录编号不正确');
-   const bytes=await limitedBody(request);let image;
+   let bytes=await limitedBody(request);let image;
    try{image=inspectImage(bytes,request.headers.get('Content-Type'));}catch(e){throw new HttpError(415,e.message);}
+   // Keep the complete image codestream; discard opaque bytes after JPEG EOI.
+   bytes=bytes.subarray(0,image.byteLength);
    const key=`daily/${recordId}/${user.id}/${crypto.randomUUID()}.${image.ext}`;
    const sha256=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
    await env.LOVE_MEDIA.put(key,bytes,{httpMetadata:{contentType:image.type},customMetadata:{owner:user.id,recordId,sha256}});
