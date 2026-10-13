@@ -1295,7 +1295,7 @@
     <section id="dailyCheckin">
       <h2 class="section-title">📝 日常打卡</h2>
       <p class="section-intro">
-        记录今天的一句话、一张照片，系统会自动显示发布打卡的时间。记录会在线保存到 Supabase。
+        记录今天的一句话、一张照片，系统会自动显示发布打卡的时间。登录后，双方都能看到彼此的记录。
       </p>
 
       <div class="checkin-layout">
@@ -1308,8 +1308,8 @@
 
             <label>
               今日照片
-              <input id="dailyPhoto" type="file" accept="image/*" />
-              <span class="hint">可以不传照片，只写文字也可以。</span>
+              <input id="dailyPhoto" type="file" accept="image/jpeg,image/png,image/webp" />
+              <span class="hint">可选：JPEG、PNG、WebP，单张不超过 10MB。</span>
             </label>
 
             <img id="dailyPreview" class="preview" alt="日常照片预览" />
@@ -1394,7 +1394,7 @@
     const SUPABASE_ANON_KEY = "sb_publishable_4mho25WP3uW6UiWXLYx0ng_M_IrpsV3";
 
     // Storage bucket 名称，需要和 supabase-schema.sql 保持一致。
-    const PHOTO_BUCKET = "love-photos";
+    // Legacy Supabase photos remain readable during migration.
 
     // 把这里改成你们真正的在一起日期，例如 "2024-05-20T00:00:00"
     const startDate = new Date("2025-09-14T00:00:00");
@@ -1469,6 +1469,7 @@
       const preview = document.getElementById(previewId);
 
       input.addEventListener("change", () => {
+        const epoch = authEpoch;
         const file = input.files && input.files[0];
 
         if (!file) {
@@ -1480,6 +1481,7 @@
 
         const reader = new FileReader();
         reader.onload = () => {
+          if (!isCurrent(epoch)) return;
           preview.src = reader.result;
           preview.classList.add("show");
           setTimeout(syncRightRecordPanelsOnly, 0);
@@ -1488,49 +1490,7 @@
       });
     }
 
-    function getFileExt(file) {
-      const name = file.name || "";
-      const ext = name.split(".").pop();
-      return ext && ext !== name ? ext.toLowerCase() : "jpg";
-    }
-
-    async function uploadImage(file, folder) {
-      if (!file) {
-        return { url: "", path: "" };
-      }
-
-      const ext = getFileExt(file);
-      const path = `${folder}/${Date.now()}-${uid()}.${ext}`;
-
-      const { data, error } = await sb.storage
-        .from(PHOTO_BUCKET)
-        .upload(path, file, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: file.type || "image/jpeg"
-        });
-
-      if (error) {
-        throw error;
-      }
-
-      const { data: publicData } = sb.storage
-        .from(PHOTO_BUCKET)
-        .getPublicUrl(data.path);
-
-      return {
-        url: publicData.publicUrl,
-        path: data.path
-      };
-    }
-
-    async function removeImage(path) {
-      if (!path) return;
-
-      await sb.storage
-        .from(PHOTO_BUCKET)
-        .remove([path]);
-    }
+    // Private photo API lives in assets/media.js.
 
     function checkSupabaseConfig() {
       if (
@@ -1655,5 +1615,6 @@
   <script src="assets/auth.js"></script>
   <script src="assets/moods.js"></script>
   <script src="assets/daily.js"></script>
+  <script src="assets/media.js"></script>
 </body>
 </html>
