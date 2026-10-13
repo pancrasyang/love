@@ -39,9 +39,9 @@ async function restoreSession(){
   if(epoch!==authEpoch)return;
   if(!session){clearPrivateView();showRoleChoices();$('authMessage').textContent='选择你的名字，回到我们的小日常。';return;}
   const {data:{user},error:ue}=await sb.auth.getUser();
-  if(ue||!user)throw new Error('请重新登录');
+  if(ue||!user)throw ue||new Error('请重新登录');
   const {data,error:pe}=await sb.from('profiles').select('id,role,display_name');
-  if(pe)throw new Error('账号信息暂时无法读取，请稍后重试');
+  if(pe)throw new Error((pe.message||'账号信息暂时无法读取')+(pe.code?'（'+pe.code+'）':''));
   if(epoch!==authEpoch)return;
   const profile=data.find(p=>p.id===user.id&&['pengpeng','kaikai'].includes(p.role));
   if(!profile)throw new Error('此账号未获授权或登录已失效');
@@ -49,7 +49,7 @@ async function restoreSession(){
   $('currentIdentity').textContent=`${profile.role==='pengpeng'?'☀️':'🌷'} ${profile.display_name}`;
   $('authGate').hidden=true;$('privateApp').hidden=false;$('loginPassword').value='';
   await window.loadPrivateData();
- }catch(error){if(epoch===authEpoch){clearPrivateView();showRoleChoices();$('authMessage').textContent=error.message||'登录验证失败，请重试';}}
+ }catch(error){if(epoch===authEpoch){clearPrivateView();showRoleChoices();$('authMessage').textContent=(error.message||'登录验证失败，请重试')+(error.code?'（'+error.code+'）':'');}}
 }
 async function logout(){
  if(!clientReady()){showClientError();return;}
@@ -62,8 +62,8 @@ $('passwordForm').addEventListener('submit',async event=>{
  event.preventDefault();if(!clientReady()){showClientError();return;}const button=$('loginSubmit');button.disabled=true;
  $('authMessage').textContent='正在验证…';
  try{
-  const response=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:selectedRole,password:$('loginPassword').value})});
-  const result=await response.json();if(!response.ok)throw new Error(result.error||'登录失败');
+  const response=await fetch('/api/login',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Love-Request':'1'},body:JSON.stringify({role:selectedRole,password:$('loginPassword').value})});
+  const result=await response.json();if(!response.ok)throw new Error((result.error||'登录失败')+(result.code?'（'+result.code+'）':''));
   const {error}=await sb.auth.setSession(result);if(error)throw error;
   await restoreSession();
  }catch(error){$('authMessage').textContent=error.message||'网络异常，请重试';}
@@ -78,5 +78,6 @@ authSubscription=clientReady()?sb.auth.onAuthStateChange((event,session)=>{
 window.loadPrivateData=async()=>{renderTodayMood();renderMoodCalendar();await loadDailyCheckins();};
 window.addEventListener('focus',()=>{if(currentProfile)restoreSession();});
 window.addEventListener('pageshow',event=>{if(event.persisted){clearPrivateView();restoreSession();}});
+window.addEventListener('storage',event=>{if(event.key==='love-session-event'){clearPrivateView();restoreSession();}});
 // Later feature scripts install their data loaders before this runs.
 if(clientReady())setTimeout(restoreSession,0);else showClientError();

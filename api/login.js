@@ -1,27 +1,13 @@
-// Vercel server function. Email mappings exist ONLY in server environment variables.
-export default async function handler(req,res) {
- res.setHeader('Cache-Control','no-store');
- const reply=(status,body)=>res.status(status).json(body);
- if(req.method!=='POST')return reply(405,{error:'请求方式不支持'});
- const origin=req.headers.origin;
- if(origin && origin!==`https://${req.headers.host}` && origin!==process.env.LOCAL_DEV_ORIGIN)return reply(403,{error:'来源不允许'});
- if(!String(req.headers['content-type']||'').startsWith('application/json'))return reply(415,{error:'请求格式不正确'});
+import {privateResponse,csrf,upstream,validate,setSession,browserSession,revoke,ApiError,failure} from '../server/session.mjs';
+export default async function handler(req,res){privateResponse(res);try{
+ if(req.method!=='POST')throw new ApiError(405,'请求方式不支持','LOGIN_METHOD');csrf(req);
+ if(!String(req.headers['content-type']||'').startsWith('application/json'))throw new ApiError(415,'请求格式不正确','LOGIN_FORMAT');
  const {role,password}=req.body||{};
- if(!['pengpeng','kaikai'].includes(role)||typeof password!=='string'||password.length<1||password.length>1024)return reply(400,{error:'请选择身份并输入密码'});
- const email=process.env[role==='pengpeng'?'PENGPENG_EMAIL':'KAIKAI_EMAIL'];
- const url=process.env.SUPABASE_URL, key=process.env.SUPABASE_PUBLISHABLE_KEY;
- if(!email||!url||!key)return reply(503,{error:'登录尚未配置，请联系网站管理员'});
- try {
-  const result=await fetch(`${url}/auth/v1/token?grant_type=password`,{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email,password}),signal:AbortSignal.timeout(15000)});
-  if(!result.ok)return reply(result.status===429?429:401,{error:result.status===429?'尝试过于频繁，请稍后再试':'身份或密码不正确'});
-  const data=await result.json();
-  const headers={apikey:key,Authorization:`Bearer ${data.access_token}`};
-  const profile=await fetch(`${url}/rest/v1/profiles?id=eq.${encodeURIComponent(data.user.id)}&select=role`,{headers,signal:AbortSignal.timeout(10000)});
-  const rows=profile.ok?await profile.json():[];
-  if(rows.length!==1||rows[0].role!==role){
-   await fetch(`${url}/auth/v1/logout?scope=local`,{method:'POST',headers,signal:AbortSignal.timeout(10000)});
-   return reply(403,{error:'此账号未获授权'});
-  }
-  return reply(200,{access_token:data.access_token,refresh_token:data.refresh_token});
- } catch {return reply(503,{error:'暂时无法登录，请稍后再试'});}
-}
+ if(!['pengpeng','kaikai'].includes(role)||typeof password!=='string'||!password.length||password.length>1024)throw new ApiError(400,'请选择身份并输入密码','LOGIN_INPUT');
+ const email=process.env[role==='pengpeng'?'PENGPENG_EMAIL':'KAIKAI_EMAIL'];if(!email)throw new ApiError(503,'登录尚未配置','LOGIN_CONFIG');
+ const r=await upstream('/auth/v1/token?grant_type=password',null,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password})},'AUTH');
+ if(!r.ok)throw new ApiError(r.status>=500?503:r.status===429?429:401,r.status===429?'尝试过于频繁，请稍后再试':r.status>=500?'身份服务暂时不可用':'身份或密码不正确','LOGIN_AUTH');
+ const data=await r.json();let identity;
+ try{identity=await validate(data.access_token);if(identity.profile.role!==role)throw new ApiError(403,'此账号未获授权','LOGIN_ROLE');}catch(error){try{await revoke(data.access_token);}catch{}throw error;}
+ return res.status(200).json(browserSession({...setSession(res,data),...identity}));
+}catch(error){return failure(res,error);}}

@@ -1252,6 +1252,7 @@
   </div>
 
   <script src="assets/vendor/supabase-2.117.3.min.js"></script>
+  <script src="assets/session-client.js"></script>
 
   <script>
     // ===============================
@@ -1277,7 +1278,8 @@
         return null;
       }
       try {
-        return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        if (typeof createLoveClient !== "function") throw new Error("Session client unavailable");
+        return createLoveClient(SUPABASE_ANON_KEY);
       } catch {
         sdkInitError = "登录组件初始化失败（SDK_INIT），请重新加载页面。";
         return null;

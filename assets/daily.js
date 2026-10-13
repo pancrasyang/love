@@ -12,15 +12,13 @@ async function loadDailyCheckins(){
  dailyRecords=rows;renderDailyCheckins(rows);syncRightRecordPanelsOnly();
  await hydratePrivatePhotos(); if(isCurrent(epoch))cleanupOrphanPhotos();
 }
-function legacyPhotoUrl(value){try{const url=new URL(value);return url.protocol==='https:'?url.href:'';}catch{return '';}}
 function renderDailyCheckins(rows){
  revokeMediaUrls();
  const list=$('dailyList');
  if(!rows.length){list.innerHTML='<div class="empty">还没有日常打卡。<br>写下今天第一句想记录的话吧。</div>';return;}
  list.innerHTML=rows.map(item=>{
   const mine=item.author_id===currentProfile.id;
-  const url=legacyPhotoUrl(item.photo_url);
-  const photo=item.photo_key?`<img data-media-key="${escapeHtml(item.photo_key)}" alt="正在加载私人照片" loading="lazy">`:url?`<img src="${escapeHtml(url)}" alt="日常打卡照片" loading="lazy">`:'';
+  const photo=item.photo_key?`<img data-media-key="${escapeHtml(item.photo_key)}" alt="正在加载私人照片" loading="lazy">`:(item.photo_url||item.photo_path)?`<img data-legacy-id="${escapeHtml(item.id)}" alt="正在加载历史照片" loading="lazy">`:'';
   return `<article class="check-card">${photo}<div class="check-body"><div class="meta-row"><span class="tag">📝 ${escapeHtml(nameOf(item.author_id))}</span><span>⏰ ${escapeHtml(formatDateTime(item.created_at))}</span></div><p>${escapeHtml(item.content)}</p>${mine?`<div class="card-actions"><button class="ghost small-button" data-action="edit" data-id="${escapeHtml(item.id)}">编辑文字</button><button class="danger small-button" data-action="delete" data-id="${escapeHtml(item.id)}">删除</button></div>`:''}</div></article>`;
  }).join('');
 }

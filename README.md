@@ -32,7 +32,7 @@ node scripts/build.mjs
    每个文件独立事务；失败会回滚该文件，先处理错误再继续。不要重复执行已成功的建表文件。
    没有删表、清空记录或猜测旧作者；历史 `author_id` 保持 NULL。
 4. 用 SQL 编辑器插入两行 profiles（下方占位符仅在控制台替换），核对 UUID 和角色。
-5. 在 Vercel 项目的服务端环境变量设置 `.env.example` 前四项。确认 Production 和所测 Preview 环境均配置。
+5. 在 Vercel 项目的服务端环境变量设置 `.env.example` 前四项以及服务端 `LOVE_SESSION_SECRET`。确认 Production 和所测 Preview 环境均配置。
    邮箱映射只由 `api/login.js` 使用；不要把账号密码设置为环境变量或写入源码。
 6. 在 `worker/wrangler.jsonc` 中把 `ALLOWED_ORIGINS` 改为实际前端 origin，多个域名用逗号分隔。
    例如只填实际使用的 `https://完整域名`，不带路径和尾斜杠；预览域名必须单独、精确列出。
@@ -46,7 +46,7 @@ npx wrangler deploy --config worker/wrangler.jsonc
 
 没有本地命令行时，可在现有 Worker 的 **Edit code** 中粘贴 `worker/dashboard-worker.mjs` 的完整内容并 Deploy；该单文件由 `node scripts/build-worker.mjs` 生成，验证脚本会检查与源码一致。保留现有 LOVE_MEDIA 绑定。Worker 的 Settings → Variables and Secrets 中设置 wrangler.jsonc 的三项 vars；这些值为项目 URL、公开 publishable key 和精确的前端域名列表，不需要服务端 key 或账号密码。部署后先检查未登录请求被拒绝，再应用剩余迁移和测试上传。
 
-现有 Worker 已由用户连接 GitHub Workers Builds：仓库 `pancrasyang/love`，当前部署分支 `upgrade/v2`，根目录 `/`，构建命令 `npm test`，部署命令 `npx wrangler deploy --config worker/wrangler.jsonc`；预览构建关闭。后续该分支提交会触发自动构建部署。正式升级完成后，再将 Worker 的部署分支与网页生产分支一起切换为 `main`。首次连接不会立即构建，需新提交触发；实际构建及 R2 验收结果另行记录。
+现有 Worker 已由用户连接 GitHub Workers Builds：仓库 `pancrasyang/love`，当前部署分支 `main`，根目录 `/`，构建命令 `npm test`，部署命令 `npx wrangler deploy --config worker/wrangler.jsonc`；预览构建关闭。后续该分支提交会触发自动构建部署。Worker 和网页生产分支已统一为 `main`。首次连接不会立即构建，需新提交触发；实际构建及 R2 验收结果另行记录。
 
 8. Vercel 预览构建使用 `vercel.json`，静态部分仅输出 index.html、letter.html、assets；登录接口是 Vercel `/api/login` 服务端函数。
 9. 完成下方真实验收，再进行历史照片迁移、逐项核对和旧 Storage 封闭。
@@ -142,7 +142,7 @@ apply 先检查全部源文件，再复制/读回/链接，最后第二遍独立
 ## Supabase SDK 本地化
 
 首页使用同域名的 `assets/vendor/supabase-2.117.3.min.js`，不再从 jsDelivr 实时下载 SDK。依赖及打包器版本均固定在 package.json / package-lock.json；用 `node scripts/build-sdk.mjs` 重建。检查脚本会比对本地资源与锁定依赖生成的输出，构建会将本地 SDK 一起发布。
-SDK 缺失或初始化失败时，`sb` 安全设为 null，私人页面保持隐藏，并显示 SDK_LOAD / SDK_INIT 与“重新加载”按钮。该修复解决脚本加载问题；浏览器到 Supabase Auth/数据库的连接仍保持现有方式，无 VPN 的 iPhone 实际网络测试尚需完成。
+SDK 缺失或初始化失败时，`sb` 安全设为 null，私人页面保持隐藏，并显示 SDK_LOAD / SDK_INIT 与“重新加载”按钮。该修复解决脚本加载问题；浏览器的后续 Supabase 请求也已改为同源接口，实际无 VPN 的 iPhone 网络验收尚需完成。
 
 ## 生产进度（2026-10-13）
 
@@ -156,3 +156,14 @@ Vercel 显式团队参数请求返回 403，但直接通过项目 ID 可正常�
 最新核查：Supabase 公开注册已关闭（disable_signup=true），匿名登录也关闭；profiles 限制只有两位已授权账号访问业务。用户反馈双账号测试正常，数据库有一条新 R2 图片记录，作者、业务记录、状态、hash 和大小登记关系一致。14 条原日常和1条原地点的旧字段校验值保持不变。历史照片尚未迁移，旧 Storage 桶仍为公开状态。
 
 真实上传发现可正常解码的 JPEG 在 EOI 后带 24 字节附加数据，被旧校验误拒。已改为按 JPEG 标记/扫描结构定位 EOI，支持基线和渐进式 JPEG；新上传只将完整图像码流写入 R2，移除结束标记之后的附加数据，大小及 SHA-256 均按实际写入字节登记，不重编码图片。用户样本修复前后解码像素完全一致。回归样本为生成的纯色小图，用户照片未提交仓库。历史迁移仍按原文件字节复制并比对 hash，不删源文件。
+
+
+## 同源会话与 Supabase 访问
+
+`/api/login` 保留双账号密码验证。新增 `/api/session` 管理会话恢复、续期、退出及一次性导入旧浏览器会话；加密的 `__Host-love-session` Cookie 使用 HttpOnly、Secure、SameSite=Lax。`LOVE_SESSION_SECRET` 为服务器随机密钥，Production 与 Preview 分别配置，不能进入源码；轮换该密钥会让旧 Cookie 失效。所有私人响应禁止缓存。
+
+本地 SDK 仅生成查询，通过 `/api/data` 访问受限的业务表。后端使用 Cookie 中的真实用户访问令牌及公开 publishable key，继续由现有 RLS 决定权限，不使用管理员 key。写请求校验同源 Origin 与自定义请求头。退出会撤销当前 Auth 会话，其他标签页也会清空私人视图。
+
+历史 Supabase 照片通过 `/api/legacy-photo` 按业务记录 ID 校验访问权限，服务器读取固定 Storage 桶，并以不超过 1MiB 的分段响应返回，兼容原有大照片。此改动不会迁移或删除旧对象，也不等于旧公开 URL 已封闭；15 张历史照片的 R2 迁移仍独立待完成。
+
+浏览器不再向 Supabase 发送请求，也不再持久保存新会话的刷新令牌。为保留 R2 的 10MB 上传能力，短期访问令牌仅保存在页面内存中，继续直接调用现有授权 Worker。它可被同源 JavaScript 访问，并非完全隐藏于浏览器；刷新令牌只在加密 HttpOnly Cookie 内。网页样式及情书原始文件保持不变。
