@@ -8,7 +8,7 @@
   "vars": {
     "SUPABASE_URL": "https://oemwxlvdpowjxhipcqil.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_4mho25WP3uW6UiWXLYx0ng_M_IrpsV3",
-    "ALLOWED_ORIGINS": ""
+    "ALLOWED_ORIGINS": "https://zhangkk.com,https://www.zhangkk.com,https://love-tan-seven.vercel.app,https://love-git-upgrade-v2-pengpengkk-s-projects1.vercel.app"
   },
   "observability": { "enabled": false }
 }

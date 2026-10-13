@@ -44,6 +44,8 @@ node scripts/build.mjs
 npx wrangler deploy --config worker/wrangler.jsonc
 ```
 
+没有本地命令行时，可在现有 Worker 的 **Edit code** 中粘贴 `worker/dashboard-worker.mjs` 的完整内容并 Deploy；该单文件由 `node scripts/build-worker.mjs` 生成，验证脚本会检查与源码一致。保留现有 LOVE_MEDIA 绑定。Worker 的 Settings → Variables and Secrets 中设置 wrangler.jsonc 的三项 vars；这些值为项目 URL、公开 publishable key 和精确的前端域名列表，不需要服务端 key 或账号密码。部署后先检查未登录请求被拒绝，再应用剩余迁移和测试上传。
+
 8. Vercel 预览构建使用 `vercel.json`，静态部分仅输出 index.html、letter.html、assets；登录接口是 Vercel `/api/login` 服务端函数。
 9. 完成下方真实验收，再进行历史照片迁移、逐项核对和旧 Storage 封闭。
 10. 验收通过后合并 PR 到 main，检查 Vercel 生产部署，并在生产域名重验登录、退出、上传和照片读取。
@@ -127,3 +129,5 @@ node scripts/migrate-photos.mjs --apply
 
 已通过 Supabase 连接核实 schema、权限和数据基线，成功应用 `love_v2_profiles` 与 `love_v2_moods` 两个迁移。续作从 003 开始，不能重跑 001/002。现有 daily_checkins/spot_checkins/Storage 未改动。两个 Auth 用户已创建、确认邮箱，并绑定 profiles 的 pengpeng / kaikai 角色；实际登录尚待验收。
 Vercel 显式团队参数请求返回 403，但直接通过项目 ID 可正常访问原 love 项目。已配置并复核 Production / Preview 的四项服务端登录环境变量；邮箱映射使用 sensitive 类型，无密码写入。升级分支原提交已重新构建为 Preview，部署 `dpl_5eaBawDb966dH1s1nk84M5MWanuZ` 为 READY，main 和生产域名未切换。Cloudflare 部署与历史照片迁移尚待执行。
+
+用户已反馈预览版可以正常登录；错误密码、双浏览器、退出后令牌撤销及完整权限验收尚待逐项确认。已按 Vercel 实际项目域名配置 Worker CORS，并准备后台可直接部署的单文件。当前无可用 Cloudflare 连接，后台实际部署需由账号持有人完成。

@@ -17,3 +17,5 @@ Supabase 已成功应用 001/002 新表迁移，未触碰现有记录与其权�
 新表建立后复核：profiles/mood_records 对 anon 的 SELECT 权限为 false；daily 与 spot 全表校验和与核查前完全一致，Storage 对象数仍为 15。
 
 后续核查：两个 Auth 用户已创建且邮箱已确认，profiles 恰有 pengpeng / kaikai 两行。Vercel 带团队参数请求 403，但按项目 ID 直接访问成功。已创建并复核 Production / Preview 的 SUPABASE_URL、SUPABASE_PUBLISHABLE_KEY、PENGPENG_EMAIL、KAIKAI_EMAIL；邮箱映射为 sensitive，无账号密码配置。升级分支提交 `8b3e45ef34c5110fc8ffb191f614fcff8ac82d5b` 重新部署为 Preview，`dpl_5eaBawDb966dH1s1nk84M5MWanuZ` 状态 READY、target 为 null。构建成功不等于真实账号或浏览器验收通过。
+
+用户反馈预览版可以正常登录。其他登录场景和端到端权限仍待验收。Worker CORS 配置已写入实际生产域名及稳定升级预览域名；单文件 dashboard-worker.mjs 与原模块源码一致性纳入检查。Cloudflare 连接搜索无结果，尚未部署远端 Worker。

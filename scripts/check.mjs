@@ -10,4 +10,6 @@ for (const file of ['index.html','letter.html']) {
  for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)) new Function(match[1]);
 }
 function check(dir){for(const e of readdirSync(dir,{withFileTypes:true})){if(e.name.startsWith('.')||e.name==='node_modules')continue; const f=dir+'/'+e.name; if(e.isDirectory())check(f);else if(/\.(m?js)$/.test(f))execFileSync(process.execPath,['--check',f]);}}
-check('.'); console.log('JS syntax, HTML endings, and original letter SHA-256 passed');
+check('.');
+execFileSync(process.execPath,['scripts/build-worker.mjs','--check'],{stdio:'inherit'});
+console.log('JS syntax, HTML endings, and original letter SHA-256 passed');
