@@ -1224,6 +1224,7 @@
           </div>
 
           <div class="mood-calendar-grid" id="moodCalendarGrid"></div>
+          <p class="hint" id="moodSyncStatus" role="status"></p><button id="refreshMoods" type="button" class="ghost small-button">刷新心情</button>
         </div>
 
         <div class="mood-popover" id="moodPopover" aria-hidden="true">
@@ -1254,7 +1255,7 @@
               <button type="button" class="mood-option" data-mood="sad" data-icon="🌧️" data-label="低落">🌧️ 低落</button>
             </div>
 
-            <textarea id="moodNoteInput" class="mood-note-input" placeholder="可以写一句当天的心情，比如：今天很想见你。"></textarea>
+            <textarea id="moodNoteInput" maxlength="2000" class="mood-note-input" placeholder="可以写一句当天的心情，比如：今天很想见你。"></textarea>
 
             <div class="mood-actions">
               <button type="button" id="moodSaveButton" class="primary" onclick="saveSelectedMood()">保存今日心情</button>
@@ -1587,259 +1588,7 @@
     // 5. 心情日历打卡
     // ===============================
 
-    const MOOD_STORAGE_KEY = "loveDailyMoodRecordsV1";
-    const moodOptions = Array.from(document.querySelectorAll(".mood-option"));
-    const moodNoteInput = document.getElementById("moodNoteInput");
-    const moodTodayDate = document.getElementById("moodTodayDate");
-    const moodTodayIcon = document.getElementById("moodTodayIcon");
-    const moodTodayText = document.getElementById("moodTodayText");
-    const moodTodayNote = document.getElementById("moodTodayNote");
-    const moodMonthTitle = document.getElementById("moodMonthTitle");
-    const moodCalendarGrid = document.getElementById("moodCalendarGrid");
-    const moodPopover = document.getElementById("moodPopover");
-    const moodPopoverDate = document.getElementById("moodPopoverDate");
-    const moodPopoverTip = document.getElementById("moodPopoverTip");
-    const moodViewBox = document.getElementById("moodViewBox");
-    const moodViewIcon = document.getElementById("moodViewIcon");
-    const moodViewText = document.getElementById("moodViewText");
-    const moodViewNote = document.getElementById("moodViewNote");
-    const moodSaveButton = document.getElementById("moodSaveButton");
-    const moodDeleteButton = document.getElementById("moodDeleteButton");
-
-    let selectedMood = null;
-    let selectedMoodDateKey = getMoodDateKey();
-    let moodViewDate = new Date();
-
-    const moodMap = {
-      happy: { icon: "😊", label: "开心" },
-      sweet: { icon: "💗", label: "超甜" },
-      miss: { icon: "🥺", label: "想你" },
-      calm: { icon: "🌙", label: "平静" },
-      tired: { icon: "😴", label: "疲惫" },
-      sad: { icon: "🌧️", label: "低落" }
-    };
-
-    function getMoodDateKey(date = new Date()) {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-
-      return `${year}-${month}-${day}`;
-    }
-
-    function getMoodRecords() {
-      try {
-        return JSON.parse(localStorage.getItem(MOOD_STORAGE_KEY)) || {};
-      } catch (error) {
-        return {};
-      }
-    }
-
-    function setMoodRecords(records) {
-      localStorage.setItem(MOOD_STORAGE_KEY, JSON.stringify(records));
-    }
-
-    function getDateFromKey(dateKey) {
-      return new Date(`${dateKey}T00:00:00`);
-    }
-
-    function isTodayMoodDate(dateKey) {
-      return dateKey === getMoodDateKey();
-    }
-
-    function updateMoodOptionActive() {
-      moodOptions.forEach((button) => {
-        button.classList.toggle("active", button.dataset.mood === selectedMood);
-      });
-    }
-
-    function renderTodayMood() {
-      const todayKey = getMoodDateKey();
-      const records = getMoodRecords();
-      const todayRecord = records[todayKey];
-      const todayText = new Intl.DateTimeFormat("zh-CN", {
-        month: "2-digit",
-        day: "2-digit",
-        weekday: "short"
-      }).format(new Date());
-
-      moodTodayDate.textContent = todayText;
-
-      if (!todayRecord) {
-        moodTodayIcon.textContent = "♡";
-        moodTodayText.textContent = "今天还没有打卡";
-        moodTodayNote.textContent = "只有今天可以新增或修改心情。";
-        return;
-      }
-
-      const mood = moodMap[todayRecord.mood] || { icon: "♡", label: "未知心情" };
-      moodTodayIcon.textContent = mood.icon;
-      moodTodayText.textContent = `今天是「${mood.label}」`;
-      moodTodayNote.textContent = todayRecord.note || "今天的心情已经记录好啦。";
-    }
-
-    function renderMoodCalendar() {
-      const records = getMoodRecords();
-      const year = moodViewDate.getFullYear();
-      const month = moodViewDate.getMonth();
-      const todayKey = getMoodDateKey();
-
-      moodMonthTitle.textContent = new Intl.DateTimeFormat("zh-CN", {
-        year: "numeric",
-        month: "long"
-      }).format(moodViewDate);
-
-      const firstDay = new Date(year, month, 1);
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const startWeekday = firstDay.getDay();
-
-      const cells = [];
-
-      for (let i = 0; i < startWeekday; i++) {
-        cells.push(`<div class="mood-day is-empty"></div>`);
-      }
-
-      for (let day = 1; day <= daysInMonth; day++) {
-        const date = new Date(year, month, day);
-        const dateKey = getMoodDateKey(date);
-        const record = records[dateKey];
-        const mood = record ? moodMap[record.mood] : null;
-        const todayClass = dateKey === todayKey ? "is-today" : "";
-        const titleText = dateKey === todayKey
-          ? "点击打卡或修改今天心情"
-          : (record ? "点击查看或删除这天心情" : "这一天没有心情记录");
-
-        cells.push(`
-          <button type="button" class="mood-day ${todayClass}" onclick="openMoodPopover('${dateKey}')" title="${escapeHtml(titleText)}">
-            <span class="mood-day-icon">${mood ? mood.icon : ""}</span>
-            <span class="mood-day-number">${day}</span>
-          </button>
-        `);
-      }
-
-      moodCalendarGrid.innerHTML = cells.join("");
-    }
-
-    function openMoodPopover(dateKey) {
-      const records = getMoodRecords();
-      const record = records[dateKey];
-      const date = getDateFromKey(dateKey);
-      const canEdit = isTodayMoodDate(dateKey);
-      const mood = record ? moodMap[record.mood] : null;
-
-      selectedMoodDateKey = dateKey;
-      selectedMood = canEdit && record ? record.mood : null;
-      moodNoteInput.value = canEdit && record ? record.note || "" : "";
-
-      moodPopoverDate.textContent = new Intl.DateTimeFormat("zh-CN", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        weekday: "short"
-      }).format(date);
-
-      moodPopover.classList.toggle("readonly", !canEdit);
-      moodPopover.classList.toggle("no-record", !record);
-
-      if (canEdit) {
-        moodPopoverTip.textContent = "今天可以新增或修改心情。";
-        moodViewBox.classList.remove("show");
-        moodSaveButton.textContent = record ? "更新今日心情" : "保存今日心情";
-        moodDeleteButton.textContent = "删除今天记录";
-      } else {
-        moodPopoverTip.textContent = "非当天日期只能查看心情，或删除已有记录，不能新增或修改。";
-        moodViewBox.classList.add("show");
-
-        if (record && mood) {
-          moodViewIcon.textContent = mood.icon;
-          moodViewText.textContent = `这一天是「${mood.label}」`;
-          moodViewNote.textContent = record.note || "这一天有心情记录，但没有备注。";
-        } else {
-          moodViewIcon.textContent = "♡";
-          moodViewText.textContent = "这一天还没有心情记录";
-          moodViewNote.textContent = "只能查看已有记录，不能给过去或未来补打卡。";
-        }
-
-        moodDeleteButton.textContent = "删除这天记录";
-      }
-
-      updateMoodOptionActive();
-      moodPopover.classList.add("show");
-      moodPopover.setAttribute("aria-hidden", "false");
-    }
-
-    function closeMoodPopover() {
-      moodPopover.classList.remove("show");
-      moodPopover.setAttribute("aria-hidden", "true");
-    }
-
-    moodOptions.forEach((button) => {
-      button.addEventListener("click", () => {
-        if (!isTodayMoodDate(selectedMoodDateKey)) return;
-
-        selectedMood = button.dataset.mood;
-        updateMoodOptionActive();
-      });
-    });
-
-    function saveSelectedMood() {
-      if (!selectedMoodDateKey) return;
-
-      if (!isTodayMoodDate(selectedMoodDateKey)) {
-        alert("只能给今天打卡或修改今天的心情。");
-        return;
-      }
-
-      if (!selectedMood) {
-        alert("请先选择一个心情。");
-        return;
-      }
-
-      const records = getMoodRecords();
-
-      records[selectedMoodDateKey] = {
-        mood: selectedMood,
-        note: moodNoteInput.value.trim(),
-        updatedAt: new Date().toISOString()
-      };
-
-      setMoodRecords(records);
-      renderTodayMood();
-      renderMoodCalendar();
-      closeMoodPopover();
-      throwHearts();
-    }
-
-    function clearSelectedMood() {
-      if (!selectedMoodDateKey) return;
-
-      const records = getMoodRecords();
-
-      if (!records[selectedMoodDateKey]) {
-        closeMoodPopover();
-        return;
-      }
-
-      delete records[selectedMoodDateKey];
-      setMoodRecords(records);
-
-      renderTodayMood();
-      renderMoodCalendar();
-      closeMoodPopover();
-    }
-
-    function changeMoodMonth(offset) {
-      moodViewDate = new Date(moodViewDate.getFullYear(), moodViewDate.getMonth() + offset, 1);
-      renderMoodCalendar();
-    }
-
-    moodPopover.addEventListener("click", (event) => {
-      if (event.target === moodPopover) {
-        closeMoodPopover();
-      }
-    });
-
-    // Mood renders after authentication.
+    // Cloud mood behavior lives in assets/moods.js.
 
     // ===============================
     // 6. 图片预览
@@ -2025,5 +1774,6 @@
     syncRightRecordPanelsOnly();
   </script>
   <script src="assets/auth.js"></script>
+  <script src="assets/moods.js"></script>
 </body>
 </html>
