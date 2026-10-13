@@ -1,0 +1,70 @@
+name: Migrate legacy photos to R2
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Dry-run validates sources; apply copies, verifies and links without deleting sources.
+        type: choice
+        required: true
+        default: dry-run
+        options:
+          - dry-run
+          - apply
+
+permissions:
+  contents: read
+
+concurrency:
+  group: love-legacy-media-migration
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: github.repository == 'pancrasyang/love' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: legacy-media-migration
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+      - name: Verify reviewed migration code without administrator credentials
+        run: |
+          npm ci --ignore-scripts
+          node scripts/check.mjs
+          npm test
+      - name: Validate, copy and verify photos
+        env:
+          SUPABASE_URL: https://oemwxlvdpowjxhipcqil.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          MIGRATION_MODE: ${{ inputs.mode }}
+        run: |
+          node --input-type=module <<'JS'
+          import {appendFileSync} from 'node:fs';
+          import {migrate} from './scripts/migrate-photos.mjs';
+          const summarize=(stage,report)=>{
+            const counts={};for(const item of report.items)counts[item.status]=(counts[item.status]||0)+1;
+            // Reports contain private keys/paths; keep them on the runner only.
+            console.log(JSON.stringify({stage,photos:report.items.length,failed:report.failed,counts}));
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY,`${stage}: ${report.items.length} photos; ${report.failed} failures.\n\n`);
+            if(report.failed)throw Error('Migration stage failed; no automatic storage closure');
+          };
+          if(!['dry-run','apply'].includes(process.env.MIGRATION_MODE))throw Error('Invalid migration mode');
+          const preflight=await migrate({reportPath:'migration-report.preflight.local.json'});
+          summarize('Source preflight',preflight);
+          if(process.env.MIGRATION_MODE==='apply'){
+            const copied=await migrate({apply:true,reportPath:'migration-report.copy.local.json'});
+            summarize('Copy and link',copied);
+            const verified=await migrate({apply:true,reportPath:'migration-report.verify.local.json'});
+            summarize('Independent source/R2 recheck',verified);
+            if(verified.items.some(item=>item.status!=='verified-existing'))throw Error('A new link needs another verification run');
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY,'Every linked photo was read back and verified. Original Storage objects were retained. Storage privacy must be finalized separately after database and website checks.\n');
+          }
+          JS

@@ -31,3 +31,8 @@ Advisor 中匿名 definer 提示已消失；剩余三个 authenticated definer �
 用户截图确认现有 love-media-api 已连接 GitHub 仓库 pancrasyang/love，部署分支 upgrade/v2。后台提示提交新 commit 后开始首次构建。本记录提交用于触发第一次自动部署；连接成功不等于构建或远端上传验收成功。
 
 上线前核查（用户授权正式上线）：用户反馈双账号测试无问题；生产库 daily 15 行（14 条原历史+1条新图记录），media 1 行 ready，作者/业务UUID/业务类型/hash/大小关系一致，无 deleting 项。原历史 checksum 仍分别为 f25d16f3060663a0ce87d50116ecf3ce / f2e853174b8f8a6428c7a5ef68566af4。Auth settings 的 disable_signup=true、anonymous_users=false。公开旧 Storage 仍有15张未迁移图片，保留迁移期兼容显示。mood_records 尚无记录，所以真实双人同日心情展示未验收。本次正式上线按用户要求先发布已经测试的功能，后续继续迁移和验收，不宣称全部任务完成。
+
+正式上线完成：PR #1 合并到 main，提交 b986ae756d57cda9a7b04bd7f70a00c3b9ebb0e7。Vercel dpl_5JPruZfExFPQUKwrUan1CZphTDVY 为 production / READY，已指向 www.zhangkk.com。正式首页和 auth.js 为200且源码匹配；错误密码接口为401；正式 letter.html 与原文件 hash 一致。用户已将 Cloudflare 自动部署分支改为 main。
+实际迁移前再次核实仍有14张日常+1张地点待搬运。当前会话没有管理员 Supabase / R2 迁移凭据，已准备仅限 main 的一次性手动迁移 workflow；原图只读预检另行记录。此准备不代表实际复制完成。
+
+原图只读预检已完成：通过生产数据库读取准确的记录/对象路径清单，再下载旧公开 Storage 的15张原图。迁移模块的真实格式、大小及 hash 计算均通过，15 ready / 0 failed，总33,696,318字节；未写 R2、未改数据库关联、未删源文件。包含源路径的清单和逐项 hash 报告仅保存在私有临时位置，不进入仓库或公开 Actions 产物。一次性 workflow 的 YAML、内联 Node 语法、main 限制、安装步骤不注入凭据及无公开报告上传均已检查。

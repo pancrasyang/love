@@ -91,6 +91,18 @@ node scripts/migrate-photos.mjs --apply
 任一项失败不回填；保留 photo_url/photo_path、文字、日期和旧对象。未知照片域名、超限文件或不支持的类型报告失败并保留，需单独处理。
 脚本按 200 行分页，可重跑；并发已更新记录不会被覆盖。
 
+### 一次性 GitHub Actions 迁移
+
+没有可信本地终端时，在仓库 Settings → Secrets and variables → Actions 中配置四项 Secret：
+SUPABASE_SERVICE_ROLE_KEY（支持新的 sb_secret_ 服务端 key）、R2_ENDPOINT、R2_ACCESS_KEY_ID、R2_SECRET_ACCESS_KEY。
+Supabase key 只用于迁移任务；R2 token 只授予 love-media 桶的 Object Read & Write。不要把这些值写入 Worker vars、网页、源码或聊天。
+建议使用独立临时凭据。可为 legacy-media-migration 环境设置本人为 required reviewer，并限制部署分支为 main，审批所运行的具体 main 提交。
+
+在 Actions → Migrate legacy photos to R2 → Run workflow 中选择 main，先运行 dry-run，再运行 apply。
+任务只接受本仓库 main 分支，使用固定提交版本的 GitHub Actions；安装及测试步骤不注入管理员凭据。
+apply 先检查全部源文件，再复制/读回/链接，最后第二遍独立核对所有关联文件。控制台及任务摘要只输出数量和状态；包含私人文件 key 的报告不公开上传。
+任务不会自动删除旧对象或封闭旧 Storage。成功后应核对数据库和网页，再执行 finalize-storage.sql；随后撤销临时 R2 token / Supabase secret，并移除仓库迁移 Secrets。
+
 所有历史照片逐项通过后，才执行 `supabase/finalize-storage.sql`。
 它检查有没有遗漏，将旧 bucket 设为私有并封闭客户端旧路径访问，**不删除任何旧对象**。
 在此之前，旧版已经发出的公开 Supabase 图片地址仍可能访问，不能宣称全部历史照片已私有化。
