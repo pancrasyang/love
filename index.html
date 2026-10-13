@@ -1134,6 +1134,7 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="assets/auth.css">
 </head>
 
 <body>
@@ -1156,7 +1157,15 @@
     </audio>
   </div>
 
-  <main class="page">
+  <section id="authGate" class="auth-gate glass" aria-labelledby="authTitle">
+    <div class="badge">💗 Love Diary</div><h1 id="authTitle">欢迎回到<br>我们的小日常</h1>
+    <div id="roleChoices" class="role-choices"><button class="primary" onclick="chooseRole('pengpeng')">朋朋</button><button class="secondary" onclick="chooseRole('kaikai')">开开</button></div>
+    <form id="passwordForm" hidden><label><span id="loginName"></span><input id="loginPassword" type="password" autocomplete="current-password" placeholder="请输入你的密码" required maxlength="1024"></label><button id="loginSubmit" class="primary" type="submit">进入我们的小日常</button><button type="button" class="ghost" onclick="showRoleChoices()">重新选择身份</button></form>
+    <p id="authMessage" class="auth-message" role="status">正在检查登录状态…</p><button id="retryLogout" class="ghost" onclick="logout()" hidden>重试退出</button>
+    <noscript>请启用 JavaScript 后登录。</noscript>
+  </section>
+  <main class="page" id="privateApp" hidden>
+    <nav class="account-bar" aria-label="当前账号"><span class="tag" id="currentIdentity"></span><button class="ghost small-button" onclick="logout()">切换账号</button><button class="ghost small-button" onclick="logout()">退出登录</button></nav>
     <section class="hero">
       <div class="hero-copy glass">
         <div class="badge">💗 Love Diary · 恋爱日常</div>
@@ -1830,8 +1839,7 @@
       }
     });
 
-    renderTodayMood();
-    renderMoodCalendar();
+    // Mood renders after authentication.
 
     // ===============================
     // 6. 图片预览
@@ -1843,6 +1851,8 @@
     // ===============================
 
     async function loadDailyCheckins() {
+      if (!currentProfile) return;
+      const epoch = authEpoch;
       const list = document.getElementById("dailyList");
       list.innerHTML = `<div class="loading">正在加载日常记录...</div>`;
 
@@ -1856,6 +1866,7 @@
         return;
       }
 
+      if (!isCurrent(epoch)) return;
       renderDailyCheckins(data || []);
       syncRightRecordPanelsOnly();
     }
@@ -2011,14 +2022,8 @@
       });
     }
 
-    // 首次加载在线数据
-    if (!SUPABASE_URL.includes("你的项目ID") && !SUPABASE_ANON_KEY.includes("你的anon")) {
-      loadDailyCheckins();
-    } else {
-      document.getElementById("dailyList").innerHTML = `<div class="empty">请先填写 SUPABASE_URL 和 SUPABASE_ANON_KEY。</div>`;
-    }
-
     syncRightRecordPanelsOnly();
   </script>
+  <script src="assets/auth.js"></script>
 </body>
 </html>
