@@ -3,7 +3,7 @@
 保留原生 HTML/CSS/JavaScript、现有粉色卡片布局、手机断点和情书原文件。
 新增双账号登录、云端双人心情、作者权限、私有 R2 照片；删除背景音乐。
 
-**当前状态：代码与本地测试完成，生产已建立 profiles / mood_records；现有表权限切换、真实双账号验收和历史照片实际迁移尚未执行。请勿在完成以下顺序前合并到生产 main。**
+**当前状态：代码及 23 项本地测试完成，生产数据库迁移和作者/文件权限已应用；用户反馈可以登录，Worker 未登录请求被拒。真实双账号照片验收和历史照片实际迁移尚未执行。请勿在完成以下顺序前合并到生产 main。旧版正式网站已不能匿名访问业务表。**
 用户已明确：旧心情不迁移。本地 `loveDailyMoodRecordsV1` 保留但不读取、不上传、不删除。
 
 ## 本地验证
@@ -28,7 +28,7 @@ node scripts/build.mjs
    现有字段应包含 id/content/created_at/photo_url/photo_path。存在额外触发器时先审查其兼容性。
 2. 在 Supabase Authentication 创建或确认两个 Email + Password 用户，邮箱和密码分别独立。
    关闭 Allow new users to sign up，不启用匿名登录。在 Auth 用户列表取得对应 UUID。
-3. 在维护窗口依次执行 `supabase/migrations/001_profiles.sql` 至 `006_legacy_spots.sql`。
+3. 在维护窗口按文件名顺序执行 `supabase/migrations/` 的全部迁移，最后执行 `20261013140850_function_permissions.sql`。
    每个文件独立事务；失败会回滚该文件，先处理错误再继续。不要重复执行已成功的建表文件。
    没有删表、清空记录或猜测旧作者；历史 `author_id` 保持 NULL。
 4. 用 SQL 编辑器插入两行 profiles（下方占位符仅在控制台替换），核对 UUID 和角色。
@@ -127,7 +127,11 @@ node scripts/migrate-photos.mjs --apply
 
 ## 生产进度（2026-10-13）
 
-已通过 Supabase 连接核实 schema、权限和数据基线，成功应用 `love_v2_profiles` 与 `love_v2_moods` 两个迁移。续作从 003 开始，不能重跑 001/002。现有 daily_checkins/spot_checkins/Storage 未改动。两个 Auth 用户已创建、确认邮箱，并绑定 profiles 的 pengpeng / kaikai 角色；实际登录尚待验收。
+已通过 Supabase 连接核实 schema、权限和数据基线，成功应用全部七个迁移。不能重复执行已应用文件。两个 Auth 用户已创建、确认邮箱，并绑定 profiles 的 pengpeng / kaikai 角色。
 Vercel 显式团队参数请求返回 403，但直接通过项目 ID 可正常访问原 love 项目。已配置并复核 Production / Preview 的四项服务端登录环境变量；邮箱映射使用 sensitive 类型，无密码写入。升级分支原提交已重新构建为 Preview，部署 `dpl_5eaBawDb966dH1s1nk84M5MWanuZ` 为 READY，main 和生产域名未切换。Cloudflare 部署与历史照片迁移尚待执行。
 
-用户已反馈预览版可以正常登录；错误密码、双浏览器、退出后令牌撤销及完整权限验收尚待逐项确认。已按 Vercel 实际项目域名配置 Worker CORS，并准备后台可直接部署的单文件。当前无可用 Cloudflare 连接，后台实际部署需由账号持有人完成。
+用户已反馈预览版可以正常登录，并已在后台部署 Worker 与变量，直接访问接口返回“请先登录”；错误密码、双浏览器、退出后令牌撤销及真实照片权限验收尚待逐项确认。本运行环境访问 Worker 被 Cloudflare 1010 拒绝，因此不能据此宣称已通过真实 R2 验收。
+
+003—006 迁移逐个应用并验证：daily 14 行、spot 1 行和 Storage 15 个对象仍在；旧字段校验值保持一致，旧作者保持 NULL。匿名 REST 读取 daily_checkins / media_objects 均为 401。
+生产发现 Supabase 直接授予 anon 的默认函数权限不能靠 REVOKE PUBLIC 移除，追加权限迁移已明确移除直接授予 anon 的权限，同时只开放三个经过实时身份/归属校验的认证入口。触发器不可由客户端直接调用；新增回归测试验证触发器仍正常工作。
+Supabase 公开注册当前仍开启（disable_signup=false），需在 Auth 设置关闭；profiles 仍限制只有两位已授权账号访问业务。历史照片尚未迁移，旧 Storage 桶仍为公开状态。
