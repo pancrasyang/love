@@ -46,6 +46,8 @@ npx wrangler deploy --config worker/wrangler.jsonc
 
 没有本地命令行时，可在现有 Worker 的 **Edit code** 中粘贴 `worker/dashboard-worker.mjs` 的完整内容并 Deploy；该单文件由 `node scripts/build-worker.mjs` 生成，验证脚本会检查与源码一致。保留现有 LOVE_MEDIA 绑定。Worker 的 Settings → Variables and Secrets 中设置 wrangler.jsonc 的三项 vars；这些值为项目 URL、公开 publishable key 和精确的前端域名列表，不需要服务端 key 或账号密码。部署后先检查未登录请求被拒绝，再应用剩余迁移和测试上传。
 
+现有 Worker 已由用户连接 GitHub Workers Builds：仓库 `pancrasyang/love`，当前部署分支 `upgrade/v2`，根目录 `/`，构建命令 `npm test`，部署命令 `npx wrangler deploy --config worker/wrangler.jsonc`；预览构建关闭。后续该分支提交会触发自动构建部署。正式升级完成后，再将 Worker 的部署分支与网页生产分支一起切换为 `main`。首次连接不会立即构建，需新提交触发；实际构建及 R2 验收结果另行记录。
+
 8. Vercel 预览构建使用 `vercel.json`，静态部分仅输出 index.html、letter.html、assets；登录接口是 Vercel `/api/login` 服务端函数。
 9. 完成下方真实验收，再进行历史照片迁移、逐项核对和旧 Storage 封闭。
 10. 验收通过后合并 PR 到 main，检查 Vercel 生产部署，并在生产域名重验登录、退出、上传和照片读取。
