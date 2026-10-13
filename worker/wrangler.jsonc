@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "love-media-api",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-10-13",
+  "workers_dev": true,
+  "r2_buckets": [{ "binding": "LOVE_MEDIA", "bucket_name": "love-media" }],
+  "vars": {
+    "SUPABASE_URL": "https://oemwxlvdpowjxhipcqil.supabase.co",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_4mho25WP3uW6UiWXLYx0ng_M_IrpsV3",
+    "ALLOWED_ORIGINS": "https://zhangkk.com,https://www.zhangkk.com,https://love-tan-seven.vercel.app,https://love-git-upgrade-v2-pengpengkk-s-projects1.vercel.app"
+  },
+  "observability": { "enabled": false }
+}

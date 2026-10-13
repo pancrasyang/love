@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- version: v13 | 基于 v12 新增情书密码页入口 -->
+<!-- version: V2.0 | 双账号、云端心情、私人照片 -->
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
@@ -312,17 +312,6 @@
       margin: 6px 0 0;
     }
 
-    .playlist {
-      padding: 32px;
-    }
-
-    .music-desc {
-      margin: -4px 0 16px;
-      color: var(--muted);
-      line-height: 1.8;
-      font-size: 15px;
-    }
-
     .top-dashboard {
       align-items: stretch;
     }
@@ -345,8 +334,7 @@
       position: relative;
     }
 
-    .mood-head,
-    .music-section-head {
+    .mood-head {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
@@ -361,8 +349,7 @@
       font-size: 14px;
     }
 
-    .mood-today-badge,
-    .music-section-badge {
+    .mood-today-badge {
       flex: 0 0 auto;
       padding: 9px 13px;
       border-radius: 999px;
@@ -611,18 +598,6 @@
 
     .mood-popover.no-record #moodDeleteButton {
       display: none;
-    }
-
-    .music-section {
-      padding: clamp(26px, 4vw, 42px);
-    }
-
-    .music-section .section-title {
-      margin-bottom: 8px;
-    }
-
-    .music-section .music-desc {
-      margin: 0;
     }
 
     .checkin-layout {
@@ -910,86 +885,6 @@
       line-height: 1.8;
     }
 
-    .bgm-player {
-      position: fixed;
-      right: 18px;
-      bottom: 18px;
-      z-index: 9;
-      display: grid;
-      grid-template-columns: 46px minmax(0, 1fr) 44px;
-      gap: 10px;
-      align-items: center;
-      width: min(330px, calc(100vw - 32px));
-      padding: 10px 12px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.76);
-      box-shadow: 0 18px 46px rgba(255, 79, 134, 0.2);
-    }
-
-    .bgm-disc {
-      width: 46px;
-      height: 46px;
-      display: grid;
-      place-items: center;
-      border-radius: 50%;
-      color: white;
-      font-weight: 1000;
-      background:
-        radial-gradient(circle, rgba(255,255,255,0.95) 0 6px, rgba(255,122,162,0.95) 7px 16px, rgba(74,43,53,0.9) 17px 100%);
-      box-shadow: 0 10px 24px rgba(255, 79, 134, 0.2);
-    }
-
-    .bgm-player.playing .bgm-disc {
-      animation: bgmSpin 4.8s linear infinite;
-    }
-
-    @keyframes bgmSpin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-
-    .bgm-info {
-      min-width: 0;
-      line-height: 1.25;
-    }
-
-    .bgm-info strong {
-      display: block;
-      color: var(--text);
-      font-size: 14px;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-
-    .bgm-info span {
-      display: block;
-      margin-top: 3px;
-      color: var(--muted);
-      font-size: 12px;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-
-    .bgm-toggle {
-      width: 44px;
-      height: 44px;
-      padding: 0;
-      border-radius: 50%;
-      color: white;
-      background: linear-gradient(135deg, var(--rose), var(--orange));
-      box-shadow: 0 10px 24px rgba(255, 79, 134, 0.24);
-      display: grid;
-      place-items: center;
-      font-size: 16px;
-    }
-
-    .bgm-player.error .bgm-disc {
-      background:
-        radial-gradient(circle, rgba(255,255,255,0.95) 0 6px, rgba(180,35,70,0.85) 7px 16px, rgba(74,43,53,0.9) 17px 100%);
-    }
-
     .modal {
       position: fixed;
       inset: 0;
@@ -1062,8 +957,7 @@
         max-height: 680px;
       }
 
-      .mood-head,
-      .music-section-head {
+      .mood-head {
         display: grid;
       }
 
@@ -1087,13 +981,6 @@
 
       .timeline-item:not(:last-child)::after {
         left: 36px;
-      }
-
-      .bgm-player {
-        left: 16px;
-        right: 16px;
-        bottom: 14px;
-        width: auto;
       }
 
       .mood-checkin {
@@ -1134,29 +1021,21 @@
       }
     }
   </style>
+  <link rel="stylesheet" href="assets/auth.css">
 </head>
 
 <body>
   <div class="floating-hearts" id="hearts"></div>
 
-  <div class="bgm-player glass" id="bgmPlayer">
-    <div class="bgm-disc" id="bgmDisc">♪</div>
-    <div class="bgm-info">
-      <strong>背景音乐</strong>
-      <span>网易云音乐 · 28232266</span>
-    </div>
-    <button type="button" class="bgm-toggle" id="bgmToggle" onclick="toggleBgm()" aria-label="播放或暂停背景音乐">
-      ▶
-    </button>
-    <audio
-      id="bgmAudio"
-      preload="metadata"
-      loop
-      src="https://music.163.com/song/media/outer/url?id=28232266.mp3">
-    </audio>
-  </div>
-
-  <main class="page">
+  <section id="authGate" class="auth-gate glass" aria-labelledby="authTitle">
+    <div class="badge">💗 Love Diary</div><h1 id="authTitle">欢迎回到<br>我们的小日常</h1>
+    <div id="roleChoices" class="role-choices"><button class="primary" onclick="chooseRole('pengpeng')">朋朋</button><button class="secondary" onclick="chooseRole('kaikai')">开开</button></div>
+    <form id="passwordForm" hidden><label><span id="loginName"></span><input id="loginPassword" type="password" autocomplete="current-password" placeholder="请输入你的密码" required maxlength="1024"></label><button id="loginSubmit" class="primary" type="submit">进入我们的小日常</button><button type="button" class="ghost" onclick="showRoleChoices()">重新选择身份</button></form>
+    <p id="authMessage" class="auth-message" role="status">正在检查登录状态…</p><button id="retryLogout" class="ghost" onclick="logout()" hidden>重试退出</button>
+    <noscript>请启用 JavaScript 后登录。</noscript>
+  </section>
+  <main class="page" id="privateApp" hidden>
+    <nav class="account-bar" aria-label="当前账号"><span class="tag" id="currentIdentity"></span><button class="ghost small-button" onclick="logout()">切换账号</button><button class="ghost small-button" onclick="logout()">退出登录</button></nav>
     <section class="hero">
       <div class="hero-copy glass">
         <div class="badge">💗 Love Diary · 恋爱日常</div>
@@ -1215,6 +1094,7 @@
           </div>
 
           <div class="mood-calendar-grid" id="moodCalendarGrid"></div>
+          <p class="hint" id="moodSyncStatus" role="status"></p><button id="refreshMoods" type="button" class="ghost small-button">刷新心情</button>
         </div>
 
         <div class="mood-popover" id="moodPopover" aria-hidden="true">
@@ -1245,7 +1125,7 @@
               <button type="button" class="mood-option" data-mood="sad" data-icon="🌧️" data-label="低落">🌧️ 低落</button>
             </div>
 
-            <textarea id="moodNoteInput" class="mood-note-input" placeholder="可以写一句当天的心情，比如：今天很想见你。"></textarea>
+            <textarea id="moodNoteInput" maxlength="2000" class="mood-note-input" placeholder="可以写一句当天的心情，比如：今天很想见你。"></textarea>
 
             <div class="mood-actions">
               <button type="button" id="moodSaveButton" class="primary" onclick="saveSelectedMood()">保存今日心情</button>
@@ -1285,7 +1165,7 @@
     <section id="dailyCheckin">
       <h2 class="section-title">📝 日常打卡</h2>
       <p class="section-intro">
-        记录今天的一句话、一张照片，系统会自动显示发布打卡的时间。记录会在线保存到 Supabase。
+        记录今天的一句话、一张照片，系统会自动显示发布打卡的时间。登录后，双方都能看到彼此的记录。
       </p>
 
       <div class="checkin-layout">
@@ -1293,13 +1173,13 @@
           <form id="dailyForm">
             <label>
               今日文字
-              <textarea id="dailyText" placeholder="例如：今天一起吃了火锅，回来的路上风很温柔。" required></textarea>
+              <textarea id="dailyText" maxlength="10000" placeholder="例如：今天一起吃了火锅，回来的路上风很温柔。" required></textarea>
             </label>
 
             <label>
               今日照片
-              <input id="dailyPhoto" type="file" accept="image/*" />
-              <span class="hint">可以不传照片，只写文字也可以。</span>
+              <input id="dailyPhoto" type="file" accept="image/jpeg,image/png,image/webp" />
+              <span class="hint">可选：JPEG、PNG、WebP，单张不超过 10MB。</span>
             </label>
 
             <img id="dailyPreview" class="preview" alt="日常照片预览" />
@@ -1308,7 +1188,7 @@
 
             <div class="form-actions">
               <button id="dailySubmitBtn" type="submit" class="primary">在线发布日常打卡</button>
-              <button type="button" class="ghost" onclick="resetDailyForm()">清空表单</button>
+              <button type="button" class="ghost" onclick="resetDailyForm()">取消 / 清空</button>
             </div>
           </form>
         </div>
@@ -1384,10 +1264,10 @@
     const SUPABASE_ANON_KEY = "sb_publishable_4mho25WP3uW6UiWXLYx0ng_M_IrpsV3";
 
     // Storage bucket 名称，需要和 supabase-schema.sql 保持一致。
-    const PHOTO_BUCKET = "love-photos";
+    // Legacy Supabase photos remain readable during migration.
 
     // 把这里改成你们真正的在一起日期，例如 "2024-05-20T00:00:00"
-    const startDate = new Date("2025-09-14T00:00:00");
+    const startDate = new Date("2025-09-14T00:00:00+08:00");
 
     const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -1419,7 +1299,8 @@
         month: "2-digit",
         day: "2-digit",
         hour: "2-digit",
-        minute: "2-digit"
+        minute: "2-digit",
+        timeZone: "Asia/Shanghai"
       }).format(new Date(dateString));
     }
 
@@ -1458,6 +1339,7 @@
       const preview = document.getElementById(previewId);
 
       input.addEventListener("change", () => {
+        const epoch = authEpoch;
         const file = input.files && input.files[0];
 
         if (!file) {
@@ -1469,6 +1351,7 @@
 
         const reader = new FileReader();
         reader.onload = () => {
+          if (!isCurrent(epoch)) return;
           preview.src = reader.result;
           preview.classList.add("show");
           setTimeout(syncRightRecordPanelsOnly, 0);
@@ -1477,49 +1360,7 @@
       });
     }
 
-    function getFileExt(file) {
-      const name = file.name || "";
-      const ext = name.split(".").pop();
-      return ext && ext !== name ? ext.toLowerCase() : "jpg";
-    }
-
-    async function uploadImage(file, folder) {
-      if (!file) {
-        return { url: "", path: "" };
-      }
-
-      const ext = getFileExt(file);
-      const path = `${folder}/${Date.now()}-${uid()}.${ext}`;
-
-      const { data, error } = await sb.storage
-        .from(PHOTO_BUCKET)
-        .upload(path, file, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: file.type || "image/jpeg"
-        });
-
-      if (error) {
-        throw error;
-      }
-
-      const { data: publicData } = sb.storage
-        .from(PHOTO_BUCKET)
-        .getPublicUrl(data.path);
-
-      return {
-        url: publicData.publicUrl,
-        path: data.path
-      };
-    }
-
-    async function removeImage(path) {
-      if (!path) return;
-
-      await sb.storage
-        .from(PHOTO_BUCKET)
-        .remove([path]);
-    }
+    // Private photo API lives in assets/media.js.
 
     function checkSupabaseConfig() {
       if (
@@ -1536,302 +1377,10 @@
     }
 
     // ===============================
-    // 4. 背景音乐播放器
-    // ===============================
-
-    const bgmAudio = document.getElementById("bgmAudio");
-    const bgmPlayer = document.getElementById("bgmPlayer");
-    const bgmToggle = document.getElementById("bgmToggle");
-
-    async function toggleBgm() {
-      try {
-        if (bgmAudio.paused) {
-          await bgmAudio.play();
-        } else {
-          bgmAudio.pause();
-        }
-      } catch (error) {
-        bgmPlayer.classList.add("error");
-        bgmToggle.textContent = "!";
-        alert("背景音乐暂时无法播放，可能是网易云版权、地区限制，或手机浏览器拦截了音频直链。");
-      }
-    }
-
-    bgmAudio.addEventListener("play", () => {
-      bgmPlayer.classList.add("playing");
-      bgmPlayer.classList.remove("error");
-      bgmToggle.textContent = "⏸";
-    });
-
-    bgmAudio.addEventListener("pause", () => {
-      bgmPlayer.classList.remove("playing");
-      bgmToggle.textContent = "▶";
-    });
-
-    bgmAudio.addEventListener("error", () => {
-      bgmPlayer.classList.add("error");
-      bgmPlayer.classList.remove("playing");
-      bgmToggle.textContent = "!";
-    });
-
-    // ===============================
     // 5. 心情日历打卡
     // ===============================
 
-    const MOOD_STORAGE_KEY = "loveDailyMoodRecordsV1";
-    const moodOptions = Array.from(document.querySelectorAll(".mood-option"));
-    const moodNoteInput = document.getElementById("moodNoteInput");
-    const moodTodayDate = document.getElementById("moodTodayDate");
-    const moodTodayIcon = document.getElementById("moodTodayIcon");
-    const moodTodayText = document.getElementById("moodTodayText");
-    const moodTodayNote = document.getElementById("moodTodayNote");
-    const moodMonthTitle = document.getElementById("moodMonthTitle");
-    const moodCalendarGrid = document.getElementById("moodCalendarGrid");
-    const moodPopover = document.getElementById("moodPopover");
-    const moodPopoverDate = document.getElementById("moodPopoverDate");
-    const moodPopoverTip = document.getElementById("moodPopoverTip");
-    const moodViewBox = document.getElementById("moodViewBox");
-    const moodViewIcon = document.getElementById("moodViewIcon");
-    const moodViewText = document.getElementById("moodViewText");
-    const moodViewNote = document.getElementById("moodViewNote");
-    const moodSaveButton = document.getElementById("moodSaveButton");
-    const moodDeleteButton = document.getElementById("moodDeleteButton");
-
-    let selectedMood = null;
-    let selectedMoodDateKey = getMoodDateKey();
-    let moodViewDate = new Date();
-
-    const moodMap = {
-      happy: { icon: "😊", label: "开心" },
-      sweet: { icon: "💗", label: "超甜" },
-      miss: { icon: "🥺", label: "想你" },
-      calm: { icon: "🌙", label: "平静" },
-      tired: { icon: "😴", label: "疲惫" },
-      sad: { icon: "🌧️", label: "低落" }
-    };
-
-    function getMoodDateKey(date = new Date()) {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-
-      return `${year}-${month}-${day}`;
-    }
-
-    function getMoodRecords() {
-      try {
-        return JSON.parse(localStorage.getItem(MOOD_STORAGE_KEY)) || {};
-      } catch (error) {
-        return {};
-      }
-    }
-
-    function setMoodRecords(records) {
-      localStorage.setItem(MOOD_STORAGE_KEY, JSON.stringify(records));
-    }
-
-    function getDateFromKey(dateKey) {
-      return new Date(`${dateKey}T00:00:00`);
-    }
-
-    function isTodayMoodDate(dateKey) {
-      return dateKey === getMoodDateKey();
-    }
-
-    function updateMoodOptionActive() {
-      moodOptions.forEach((button) => {
-        button.classList.toggle("active", button.dataset.mood === selectedMood);
-      });
-    }
-
-    function renderTodayMood() {
-      const todayKey = getMoodDateKey();
-      const records = getMoodRecords();
-      const todayRecord = records[todayKey];
-      const todayText = new Intl.DateTimeFormat("zh-CN", {
-        month: "2-digit",
-        day: "2-digit",
-        weekday: "short"
-      }).format(new Date());
-
-      moodTodayDate.textContent = todayText;
-
-      if (!todayRecord) {
-        moodTodayIcon.textContent = "♡";
-        moodTodayText.textContent = "今天还没有打卡";
-        moodTodayNote.textContent = "只有今天可以新增或修改心情。";
-        return;
-      }
-
-      const mood = moodMap[todayRecord.mood] || { icon: "♡", label: "未知心情" };
-      moodTodayIcon.textContent = mood.icon;
-      moodTodayText.textContent = `今天是「${mood.label}」`;
-      moodTodayNote.textContent = todayRecord.note || "今天的心情已经记录好啦。";
-    }
-
-    function renderMoodCalendar() {
-      const records = getMoodRecords();
-      const year = moodViewDate.getFullYear();
-      const month = moodViewDate.getMonth();
-      const todayKey = getMoodDateKey();
-
-      moodMonthTitle.textContent = new Intl.DateTimeFormat("zh-CN", {
-        year: "numeric",
-        month: "long"
-      }).format(moodViewDate);
-
-      const firstDay = new Date(year, month, 1);
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      const startWeekday = firstDay.getDay();
-
-      const cells = [];
-
-      for (let i = 0; i < startWeekday; i++) {
-        cells.push(`<div class="mood-day is-empty"></div>`);
-      }
-
-      for (let day = 1; day <= daysInMonth; day++) {
-        const date = new Date(year, month, day);
-        const dateKey = getMoodDateKey(date);
-        const record = records[dateKey];
-        const mood = record ? moodMap[record.mood] : null;
-        const todayClass = dateKey === todayKey ? "is-today" : "";
-        const titleText = dateKey === todayKey
-          ? "点击打卡或修改今天心情"
-          : (record ? "点击查看或删除这天心情" : "这一天没有心情记录");
-
-        cells.push(`
-          <button type="button" class="mood-day ${todayClass}" onclick="openMoodPopover('${dateKey}')" title="${escapeHtml(titleText)}">
-            <span class="mood-day-icon">${mood ? mood.icon : ""}</span>
-            <span class="mood-day-number">${day}</span>
-          </button>
-        `);
-      }
-
-      moodCalendarGrid.innerHTML = cells.join("");
-    }
-
-    function openMoodPopover(dateKey) {
-      const records = getMoodRecords();
-      const record = records[dateKey];
-      const date = getDateFromKey(dateKey);
-      const canEdit = isTodayMoodDate(dateKey);
-      const mood = record ? moodMap[record.mood] : null;
-
-      selectedMoodDateKey = dateKey;
-      selectedMood = canEdit && record ? record.mood : null;
-      moodNoteInput.value = canEdit && record ? record.note || "" : "";
-
-      moodPopoverDate.textContent = new Intl.DateTimeFormat("zh-CN", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        weekday: "short"
-      }).format(date);
-
-      moodPopover.classList.toggle("readonly", !canEdit);
-      moodPopover.classList.toggle("no-record", !record);
-
-      if (canEdit) {
-        moodPopoverTip.textContent = "今天可以新增或修改心情。";
-        moodViewBox.classList.remove("show");
-        moodSaveButton.textContent = record ? "更新今日心情" : "保存今日心情";
-        moodDeleteButton.textContent = "删除今天记录";
-      } else {
-        moodPopoverTip.textContent = "非当天日期只能查看心情，或删除已有记录，不能新增或修改。";
-        moodViewBox.classList.add("show");
-
-        if (record && mood) {
-          moodViewIcon.textContent = mood.icon;
-          moodViewText.textContent = `这一天是「${mood.label}」`;
-          moodViewNote.textContent = record.note || "这一天有心情记录，但没有备注。";
-        } else {
-          moodViewIcon.textContent = "♡";
-          moodViewText.textContent = "这一天还没有心情记录";
-          moodViewNote.textContent = "只能查看已有记录，不能给过去或未来补打卡。";
-        }
-
-        moodDeleteButton.textContent = "删除这天记录";
-      }
-
-      updateMoodOptionActive();
-      moodPopover.classList.add("show");
-      moodPopover.setAttribute("aria-hidden", "false");
-    }
-
-    function closeMoodPopover() {
-      moodPopover.classList.remove("show");
-      moodPopover.setAttribute("aria-hidden", "true");
-    }
-
-    moodOptions.forEach((button) => {
-      button.addEventListener("click", () => {
-        if (!isTodayMoodDate(selectedMoodDateKey)) return;
-
-        selectedMood = button.dataset.mood;
-        updateMoodOptionActive();
-      });
-    });
-
-    function saveSelectedMood() {
-      if (!selectedMoodDateKey) return;
-
-      if (!isTodayMoodDate(selectedMoodDateKey)) {
-        alert("只能给今天打卡或修改今天的心情。");
-        return;
-      }
-
-      if (!selectedMood) {
-        alert("请先选择一个心情。");
-        return;
-      }
-
-      const records = getMoodRecords();
-
-      records[selectedMoodDateKey] = {
-        mood: selectedMood,
-        note: moodNoteInput.value.trim(),
-        updatedAt: new Date().toISOString()
-      };
-
-      setMoodRecords(records);
-      renderTodayMood();
-      renderMoodCalendar();
-      closeMoodPopover();
-      throwHearts();
-    }
-
-    function clearSelectedMood() {
-      if (!selectedMoodDateKey) return;
-
-      const records = getMoodRecords();
-
-      if (!records[selectedMoodDateKey]) {
-        closeMoodPopover();
-        return;
-      }
-
-      delete records[selectedMoodDateKey];
-      setMoodRecords(records);
-
-      renderTodayMood();
-      renderMoodCalendar();
-      closeMoodPopover();
-    }
-
-    function changeMoodMonth(offset) {
-      moodViewDate = new Date(moodViewDate.getFullYear(), moodViewDate.getMonth() + offset, 1);
-      renderMoodCalendar();
-    }
-
-    moodPopover.addEventListener("click", (event) => {
-      if (event.target === moodPopover) {
-        closeMoodPopover();
-      }
-    });
-
-    renderTodayMood();
-    renderMoodCalendar();
+    // Cloud mood behavior lives in assets/moods.js.
 
     // ===============================
     // 6. 图片预览
@@ -1842,126 +1391,7 @@
     // 7. 在线保存：日常打卡
     // ===============================
 
-    async function loadDailyCheckins() {
-      const list = document.getElementById("dailyList");
-      list.innerHTML = `<div class="loading">正在加载日常记录...</div>`;
-
-      const { data, error } = await sb
-        .from("daily_checkins")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        list.innerHTML = `<div class="empty">加载失败：${escapeHtml(error.message)}</div>`;
-        return;
-      }
-
-      renderDailyCheckins(data || []);
-      syncRightRecordPanelsOnly();
-    }
-
-    function renderDailyCheckins(checkins) {
-      const list = document.getElementById("dailyList");
-
-      if (!checkins.length) {
-        list.innerHTML = `<div class="empty">还没有日常打卡。<br />写下今天第一句想记录的话吧。</div>`;
-        return;
-      }
-
-      list.innerHTML = checkins.map((item) => {
-        const photoHtml = item.photo_url
-          ? `<img src="${item.photo_url}" alt="日常打卡照片" />`
-          : "";
-
-        return `
-          <article class="check-card">
-            ${photoHtml}
-            <div class="check-body">
-              <div class="meta-row">
-                <span class="tag">📝 日常打卡</span>
-                <span>⏰ ${formatDateTime(item.created_at)}</span>
-              </div>
-              <p>${escapeHtml(item.content)}</p>
-              <div class="card-actions">
-                <button class="danger small-button" onclick="deleteDailyCheckin('${item.id}', '${escapeHtml(item.photo_path || "")}')">删除</button>
-              </div>
-            </div>
-          </article>
-        `;
-      }).join("");
-    }
-
-    document.getElementById("dailyForm").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      if (!checkSupabaseConfig()) return;
-
-      const submitBtn = document.getElementById("dailySubmitBtn");
-      const text = document.getElementById("dailyText").value.trim();
-      const photoFile = document.getElementById("dailyPhoto").files[0];
-
-      if (!text) {
-        alert("请先写一点今天的日常。");
-        return;
-      }
-
-      submitBtn.disabled = true;
-      setStatus("dailyStatus", "正在上传照片并保存记录...");
-
-      try {
-        const uploaded = await uploadImage(photoFile, "daily-checkins");
-
-        const { error } = await sb
-          .from("daily_checkins")
-          .insert({
-            content: text,
-            photo_url: uploaded.url,
-            photo_path: uploaded.path
-          });
-
-        if (error) throw error;
-
-        resetDailyForm();
-        await loadDailyCheckins();
-        setStatus("dailyStatus", "发布成功。");
-        setTimeout(() => setStatus("dailyStatus", ""), 2200);
-        throwHearts();
-      } catch (error) {
-        console.error(error);
-        setStatus("dailyStatus", `保存失败：${error.message || "请检查 Supabase 配置和 RLS/Storage 权限。"}`);
-      } finally {
-        submitBtn.disabled = false;
-        syncRightRecordPanelsOnly();
-      }
-    });
-
-    function resetDailyForm() {
-      document.getElementById("dailyForm").reset();
-
-      const preview = document.getElementById("dailyPreview");
-      preview.removeAttribute("src");
-      preview.classList.remove("show");
-      syncRightRecordPanelsOnly();
-    }
-
-    async function deleteDailyCheckin(id, photoPath) {
-      if (!checkSupabaseConfig()) return;
-      if (!confirm("确定要删除这条日常打卡吗？")) return;
-
-      try {
-        await removeImage(photoPath);
-
-        const { error } = await sb
-          .from("daily_checkins")
-          .delete()
-          .eq("id", id);
-
-        if (error) throw error;
-
-        await loadDailyCheckins();
-      } catch (error) {
-        alert(`删除失败：${error.message || "请检查删除权限。"}`);
-      }
-    }
+    // Authenticated daily behavior lives in assets/daily.js.
 
     // ===============================
     // 8. 原来的互动效果
@@ -2011,14 +1441,11 @@
       });
     }
 
-    // 首次加载在线数据
-    if (!SUPABASE_URL.includes("你的项目ID") && !SUPABASE_ANON_KEY.includes("你的anon")) {
-      loadDailyCheckins();
-    } else {
-      document.getElementById("dailyList").innerHTML = `<div class="empty">请先填写 SUPABASE_URL 和 SUPABASE_ANON_KEY。</div>`;
-    }
-
     syncRightRecordPanelsOnly();
   </script>
+  <script src="assets/auth.js"></script>
+  <script src="assets/moods.js"></script>
+  <script src="assets/daily.js"></script>
+  <script src="assets/media.js"></script>
 </body>
 </html>
