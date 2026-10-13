@@ -1031,7 +1031,7 @@
     <div class="badge">💗 Love Diary</div><h1 id="authTitle">欢迎回到<br>我们的小日常</h1>
     <div id="roleChoices" class="role-choices"><button class="primary" onclick="chooseRole('pengpeng')">朋朋</button><button class="secondary" onclick="chooseRole('kaikai')">开开</button></div>
     <form id="passwordForm" hidden><label><span id="loginName"></span><input id="loginPassword" type="password" autocomplete="current-password" placeholder="请输入你的密码" required maxlength="1024"></label><button id="loginSubmit" class="primary" type="submit">进入我们的小日常</button><button type="button" class="ghost" onclick="showRoleChoices()">重新选择身份</button></form>
-    <p id="authMessage" class="auth-message" role="status">正在检查登录状态…</p><button id="retryLogout" class="ghost" onclick="logout()" hidden>重试退出</button>
+    <p id="authMessage" class="auth-message" role="status">正在检查登录状态…</p><button id="retryLogout" class="ghost" onclick="logout()" hidden>重试退出</button><button id="retryClient" class="ghost" onclick="location.reload()" hidden>重新加载</button>
     <noscript>请启用 JavaScript 后登录。</noscript>
   </section>
   <main class="page" id="privateApp" hidden>
@@ -1251,7 +1251,7 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="assets/vendor/supabase-2.117.3.min.js"></script>
 
   <script>
     // ===============================
@@ -1269,7 +1269,20 @@
     // 把这里改成你们真正的在一起日期，例如 "2024-05-20T00:00:00"
     const startDate = new Date("2025-09-14T00:00:00+08:00");
 
-    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // Always define sb so a failed SDK load cannot crash the following scripts.
+    let sdkInitError = "";
+    const sb = (() => {
+      if (typeof window.supabase?.createClient !== "function") {
+        sdkInitError = "登录组件加载失败（SDK_LOAD），请重新加载页面。";
+        return null;
+      }
+      try {
+        return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      } catch {
+        sdkInitError = "登录组件初始化失败（SDK_INIT），请重新加载页面。";
+        return null;
+      }
+    })();
 
     const today = new Date();
     const diff = today - startDate;

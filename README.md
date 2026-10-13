@@ -139,6 +139,11 @@ apply 先检查全部源文件，再复制/读回/链接，最后第二遍独立
 [Supabase sessions](https://supabase.com/docs/guides/auth/sessions)、
 [Cloudflare R2 Workers API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/)。
 
+## Supabase SDK 本地化
+
+首页使用同域名的 `assets/vendor/supabase-2.117.3.min.js`，不再从 jsDelivr 实时下载 SDK。依赖及打包器版本均固定在 package.json / package-lock.json；用 `node scripts/build-sdk.mjs` 重建。检查脚本会比对本地资源与锁定依赖生成的输出，构建会将本地 SDK 一起发布。
+SDK 缺失或初始化失败时，`sb` 安全设为 null，私人页面保持隐藏，并显示 SDK_LOAD / SDK_INIT 与“重新加载”按钮。该修复解决脚本加载问题；浏览器到 Supabase Auth/数据库的连接仍保持现有方式，无 VPN 的 iPhone 实际网络测试尚需完成。
+
 ## 生产进度（2026-10-13）
 
 已通过 Supabase 连接核实 schema、权限和数据基线，成功应用全部七个迁移。不能重复执行已应用文件。两个 Auth 用户已创建、确认邮箱，并绑定 profiles 的 pengpeng / kaikai 角色。

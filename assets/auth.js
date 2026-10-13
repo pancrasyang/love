@@ -6,6 +6,12 @@ let selectedRole=null;
 let authSubscription=null;
 const $=id=>document.getElementById(id);
 const isCurrent=epoch=>Boolean(currentProfile)&&epoch===authEpoch;
+function clientReady(){return typeof sb!=='undefined'&&Boolean(sb?.auth);}
+function showClientError(){
+ $('privateApp').hidden=true;$('authGate').hidden=false;
+ $('authMessage').textContent=typeof sdkInitError!=='undefined'&&sdkInitError||'登录组件未能初始化，请重新加载页面。';
+ $('loginSubmit').disabled=true;$('retryClient').hidden=false;
+}
 function clearPrivateView(){
  authEpoch++;
  currentProfile=null; profileList=[];
@@ -21,9 +27,11 @@ function chooseRole(role){
  $('roleChoices').hidden=true; $('passwordForm').hidden=false;
  $('loginName').textContent=role==='pengpeng'?'朋朋':'开开';
  $('loginPassword').value=''; $('authMessage').textContent=''; $('loginPassword').focus();
+ if(!clientReady())showClientError();
 }
 function showRoleChoices(){selectedRole=null;$('roleChoices').hidden=false;$('passwordForm').hidden=true;$('loginPassword').value='';}
 async function restoreSession(){
+ if(!clientReady()){showClientError();return;}
  const epoch=++authEpoch;
  try {
   const {data:{session},error}=await sb.auth.getSession();
@@ -44,13 +52,14 @@ async function restoreSession(){
  }catch(error){if(epoch===authEpoch){clearPrivateView();showRoleChoices();$('authMessage').textContent=error.message||'登录验证失败，请重试';}}
 }
 async function logout(){
+ if(!clientReady()){showClientError();return;}
  clearPrivateView();showRoleChoices();$('authMessage').textContent='正在退出登录…';
  const {error}=await sb.auth.signOut({scope:'local'});
  $('authMessage').textContent=error?'暂时无法完成退出，请联网后点击重试退出。':'已退出登录。';
  $('retryLogout').hidden=!error;
 }
 $('passwordForm').addEventListener('submit',async event=>{
- event.preventDefault();const button=$('loginSubmit');button.disabled=true;
+ event.preventDefault();if(!clientReady()){showClientError();return;}const button=$('loginSubmit');button.disabled=true;
  $('authMessage').textContent='正在验证…';
  try{
   const response=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role:selectedRole,password:$('loginPassword').value})});
@@ -61,13 +70,13 @@ $('passwordForm').addEventListener('submit',async event=>{
  finally{button.disabled=false;$('loginPassword').value='';}
 });
 // Do not await SDK operations inside onAuthStateChange's lock.
-authSubscription=sb.auth.onAuthStateChange((event,session)=>{
+authSubscription=clientReady()?sb.auth.onAuthStateChange((event,session)=>{
  if(event==='SIGNED_OUT'){clearPrivateView();showRoleChoices();}
  else if(event==='SIGNED_IN'&&session?.user.id!==currentProfile?.id){clearPrivateView();setTimeout(restoreSession,0);}
  else if(event==='TOKEN_REFRESHED'||event==='USER_UPDATED')setTimeout(restoreSession,0);
-});
+}):null;
 window.loadPrivateData=async()=>{renderTodayMood();renderMoodCalendar();await loadDailyCheckins();};
 window.addEventListener('focus',()=>{if(currentProfile)restoreSession();});
 window.addEventListener('pageshow',event=>{if(event.persisted){clearPrivateView();restoreSession();}});
 // Later feature scripts install their data loaders before this runs.
-setTimeout(restoreSession,0);
+if(clientReady())setTimeout(restoreSession,0);else showClientError();

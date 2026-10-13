@@ -12,4 +12,5 @@ for (const file of ['index.html','letter.html']) {
 function check(dir){for(const e of readdirSync(dir,{withFileTypes:true})){if(e.name.startsWith('.')||e.name==='node_modules')continue; const f=dir+'/'+e.name; if(e.isDirectory())check(f);else if(/\.(m?js)$/.test(f))execFileSync(process.execPath,['--check',f]);}}
 check('.');
 execFileSync(process.execPath,['scripts/build-worker.mjs','--check'],{stdio:'inherit'});
+execFileSync(process.execPath,['scripts/build-sdk.mjs','--check'],{stdio:'inherit'});
 console.log('JS syntax, HTML endings, and original letter SHA-256 passed');
