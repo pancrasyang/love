@@ -1,4 +1,4 @@
-let dailyRecords=[],editingDailyId=null,dailyBusy=false,dailyRequest=0;
+let dailyRecords=[],legacySpotRecords=[],editingDailyId=null,dailyBusy=false,dailyRequest=0;
 async function loadDailyCheckins(){
  if(!currentProfile)return;const epoch=authEpoch,request=++dailyRequest,rows=[];
  if(!dailyRecords.length)$('dailyList').innerHTML='<div class="loading">正在加载日常记录…</div>';
@@ -8,19 +8,27 @@ async function loadDailyCheckins(){
   if(error){$('dailyList').innerHTML='<div class="empty">记录加载失败，请稍后刷新。</div>';return;}
   rows.push(...data);if(data.length<200)break;
  }
- if(JSON.stringify(rows)===JSON.stringify(dailyRecords)&&$('dailyList').querySelector('.check-card,.empty'))return;
- dailyRecords=rows;renderDailyCheckins(rows);syncRightRecordPanelsOnly();
+ const spots=[];for(let offset=0;;offset+=200){const {data,error}=await sb.from('spot_checkins').select('id,spot_name,spot_date,created_at,photo_url,photo_path,photo_key').order('created_at',{ascending:false}).range(offset,offset+199);if(!isCurrent(epoch)||request!==dailyRequest)return;if(error){setStatus('dailyStatus','历史地点照片暂时无法读取，请刷新重试。');return;}spots.push(...data);if(data.length<200)break;}
+ window.resumePhotoLoads?.(currentProfile.id);
+ if(JSON.stringify(rows)===JSON.stringify(dailyRecords)&&JSON.stringify(spots)===JSON.stringify(legacySpotRecords)&&$('dailyList').querySelector('.check-card,.empty')){await hydratePrivatePhotos();return;}
+ dailyRecords=rows;legacySpotRecords=spots;renderDailyCheckins([...rows,...spots.map(row=>({...row,source_kind:'spot',author_id:null,content:(row.spot_name||'历史地点')+(row.spot_date?' · '+row.spot_date:'')}))].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)));syncRightRecordPanelsOnly();
  await hydratePrivatePhotos(); if(isCurrent(epoch))cleanupOrphanPhotos();
 }
 function renderDailyCheckins(rows){
- revokeMediaUrls();
  const list=$('dailyList');
- if(!rows.length){list.innerHTML='<div class="empty">还没有日常打卡。<br>写下今天第一句想记录的话吧。</div>';return;}
- list.innerHTML=rows.map(item=>{
+ if(!rows.length){photoCache.prune(currentProfile.id,new Set());list.innerHTML='<div class="empty">还没有日常打卡。<br>写下今天第一句想记录的话吧。</div>';return;}
+ const existing=new Map([...list.children].map(card=>[card.dataset.recordId,card]));
+ const cards=rows.map(item=>{
   const mine=item.author_id===currentProfile.id;
-  const photo=item.photo_key?`<img data-media-key="${escapeHtml(item.photo_key)}" alt="正在加载私人照片" loading="lazy">`:(item.photo_url||item.photo_path)?`<img data-legacy-id="${escapeHtml(item.id)}" alt="正在加载历史照片" loading="lazy">`:'';
-  return `<article class="check-card">${photo}<div class="check-body"><div class="meta-row"><span class="tag">📝 ${escapeHtml(nameOf(item.author_id))}</span><span>⏰ ${escapeHtml(formatDateTime(item.created_at))}</span></div><p>${escapeHtml(item.content)}</p>${mine?`<div class="card-actions"><button class="ghost small-button" data-action="edit" data-id="${escapeHtml(item.id)}">编辑文字</button><button class="danger small-button" data-action="delete" data-id="${escapeHtml(item.id)}">删除</button></div>`:''}</div></article>`;
- }).join('');
+  const photo=item.photo_key?`<img data-media-key="${escapeHtml(item.photo_key)}" alt="正在加载私人照片" loading="lazy">`:(item.photo_url||item.photo_path)?`<img data-legacy-kind="${item.source_kind||'daily'}" data-legacy-id="${escapeHtml(item.id)}" alt="正在加载历史照片" loading="lazy">`:'';
+  const markup=`<article class="check-card" data-record-id="${escapeHtml(item.id)}">${photo}<div class="check-body"><div class="meta-row"><span class="tag">${item.source_kind==='spot'?'📍 历史地点':'📝 '+escapeHtml(nameOf(item.author_id))}</span><span>⏰ ${escapeHtml(formatDateTime(item.created_at))}</span></div><p>${escapeHtml(item.content)}</p>${mine?`<div class="card-actions"><button class="ghost small-button" data-action="edit" data-id="${escapeHtml(item.id)}">编辑文字</button><button class="danger small-button" data-action="delete" data-id="${escapeHtml(item.id)}">删除</button></div>`:''}</div></article>`;
+  const old=existing.get(String(item.id)),holder=document.createElement('template');holder.innerHTML=markup;const card=holder.content.firstElementChild;
+  const before=old?.querySelector('img'),after=card.querySelector('img');
+  if(before&&after&&before.dataset.mediaKey===after.dataset.mediaKey&&before.dataset.legacyId===after.dataset.legacyId&&before.dataset.legacyKind===after.dataset.legacyKind)after.replaceWith(before);
+  return card;
+ });
+ list.replaceChildren(...cards);
+ photoCache.prune(currentProfile.id,new Set(cards.map(card=>card.querySelector('img')).filter(Boolean).map(img=>photoDescriptor(img).ref)));
 }
 function editDailyCheckin(id){
  const item=dailyRecords.find(r=>r.id===id&&r.author_id===currentProfile?.id);if(!item||dailyBusy)return;
@@ -56,4 +64,4 @@ async function deleteDailyCheckin(id){
 }
 $('dailyList').addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(!b)return;if(b.dataset.action==='edit')editDailyCheckin(b.dataset.id);else deleteDailyCheckin(b.dataset.id);});
 const clearMoodData=window.clearPrivateData;
-window.clearPrivateData=()=>{clearMoodData?.();dailyRecords=[];dailyRequest++;editingDailyId=null;resetDailyForm();};
+window.clearPrivateData=()=>{clearMoodData?.();dailyRecords=[];legacySpotRecords=[];dailyRequest++;editingDailyId=null;resetDailyForm();};

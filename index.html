@@ -756,6 +756,11 @@
       flex-shrink: 0;
     }
 
+    .check-card img:not([src]), .check-card img[data-photo-state="error"] {
+      height: min(310px, 60vw);
+      min-height: 180px;
+    }
+
     .check-body {
       padding: 20px;
     }
@@ -1195,6 +1200,7 @@
 
         <div class="panel glass record-panel">
           <h2 class="section-title">日常记录</h2>
+          <div class="meta-row"><span id="photoCacheStatus" class="hint"></span><button id="clearPhotoCache" type="button" class="ghost small-button">清除本机照片缓存</button></div>
           <div id="dailyList" class="list scroll-list"></div>
         </div>
       </div>
@@ -1461,6 +1467,7 @@
   <script src="assets/auth.js"></script>
   <script src="assets/moods.js"></script>
   <script src="assets/daily.js"></script>
+  <script src="assets/photo-cache.js"></script>
   <script src="assets/media.js"></script>
 </body>
 </html>

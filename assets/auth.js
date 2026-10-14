@@ -32,6 +32,7 @@ function chooseRole(role){
 function showRoleChoices(){selectedRole=null;$('roleChoices').hidden=false;$('passwordForm').hidden=true;$('loginPassword').value='';}
 async function restoreSession(){
  if(!clientReady()){showClientError();return;}
+ window.pausePhotoLoads?.();
  const epoch=++authEpoch;
  try {
   const {data:{session},error}=await sb.auth.getSession();
