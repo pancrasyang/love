@@ -14,7 +14,7 @@ export default {async fetch(request,env){
  const json=(body,status=200)=>new Response(JSON.stringify(body),{status,headers:new Headers([...headers,['Content-Type','application/json']])});
  if(!allowed.length)return json({error:'文件服务尚未配置'},503);
  if(origin&&!allowed.includes(origin))return json({error:'来源不允许'},403);
- if(origin){headers.set('Access-Control-Allow-Origin',origin);headers.set('Access-Control-Allow-Methods','GET,POST,DELETE,OPTIONS');headers.set('Access-Control-Allow-Headers','Authorization,Content-Type,X-Record-Id');}
+ if(origin){headers.set('Access-Control-Allow-Origin',origin);headers.set('Access-Control-Allow-Methods','GET,HEAD,POST,DELETE,OPTIONS');headers.set('Access-Control-Allow-Headers','Authorization,Content-Type,X-Record-Id,Range');}
  if(request.method==='OPTIONS')return new Response(null,{status:204,headers});
  try{
   const auth=request.headers.get('Authorization');if(!/^Bearer [^\s]+$/.test(auth||''))throw new HttpError(401,'请先登录');
@@ -47,11 +47,18 @@ export default {async fetch(request,env){
   if(!KEY.test(key))throw new HttpError(400,'文件编号不正确');
   const rows=await rest(`/rest/v1/media_objects?key=eq.${encodeURIComponent(key)}&select=*`);
   const row=rows?.[0];if(!row)throw new HttpError(404,'文件不存在或无权访问');
-  if(request.method==='GET'){
+  if(request.method==='GET'||request.method==='HEAD'){
    if(row.state!=='ready')throw new HttpError(404,'文件已删除');
-   const object=await env.LOVE_MEDIA.get(key);if(!object)throw new HttpError(404,'文件不存在');
-   headers.set('Content-Type',row.content_type);headers.set('Content-Length',String(object.size));headers.set('Content-Disposition','inline');
-   return new Response(object.body,{headers});
+   const rangeHeader=request.headers.get('Range');let range;
+   if(rangeHeader){const match=rangeHeader.match(/^bytes=(\d+)-(\d*)$/);if(!match)throw new HttpError(416,'文件分段范围不正确');const start=Number(match[1]),end=match[2]?Number(match[2]):row.size_bytes-1;if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||end<start||start>=row.size_bytes)throw new HttpError(416,'文件分段范围不正确');range={offset:start,length:Math.min(end,row.size_bytes-1)-start+1};}
+   const object=await env.LOVE_MEDIA.get(key,range?{range}:undefined);if(!object)throw new HttpError(404,'文件不存在');
+   if(row.size_bytes&&object.size!==row.size_bytes)throw new HttpError(503,'文件大小与登记不一致');
+   headers.set('Content-Type',row.content_type);headers.set('Content-Length',String(range?.length||object.size));headers.set('Content-Disposition','inline');headers.set('Accept-Ranges','bytes');
+   if(row.sha256){headers.set('X-Media-Version',row.sha256);headers.set('ETag','"'+row.sha256+'"');}
+   if(range)headers.set('Content-Range',`bytes ${range.offset}-${range.offset+range.length-1}/${object.size}`);
+   headers.set('Access-Control-Expose-Headers','Content-Range,Content-Length,ETag,X-Media-Version');
+   if(request.method==='HEAD'){try{await object.body?.cancel?.();}catch{}return new Response(null,{headers});}
+   return new Response(object.body,{status:range?206:200,headers});
   }
   if(request.method==='DELETE'){
    if(row.owner_id!==user.id)throw new HttpError(403,'只能删除自己的照片');

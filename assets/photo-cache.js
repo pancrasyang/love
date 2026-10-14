@@ -1,5 +1,6 @@
 /* Private, account-scoped application cache. HTTP responses remain no-store. */
-function createLovePhotoCache({factory=window.indexedDB,name='love-private-photos-v1',limit=200*1024*1024,ttl=30*86400000,now=()=>Date.now()}={}){
+function createLovePhotoCache({factory,name='love-private-photos-v1',limit=200*1024*1024,ttl=30*86400000,now=()=>Date.now()}={}){
+ try{if(factory===undefined)factory=window.indexedDB;}catch{factory=null;}
  const request=r=>new Promise((resolve,reject)=>{r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
  let opening;
  async function database(){
