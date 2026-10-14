@@ -10,9 +10,9 @@ async function loadDailyCheckins(){
  }
  const spots=[];for(let offset=0;;offset+=200){const {data,error}=await sb.from('spot_checkins').select('id,spot_name,spot_date,created_at,photo_url,photo_path,photo_key').order('created_at',{ascending:false}).range(offset,offset+199);if(!isCurrent(epoch)||request!==dailyRequest)return;if(error){setStatus('dailyStatus','历史地点照片暂时无法读取，请刷新重试。');return;}spots.push(...data);if(data.length<200)break;}
  window.resumePhotoLoads?.(currentProfile.id);
- if(JSON.stringify(rows)===JSON.stringify(dailyRecords)&&JSON.stringify(spots)===JSON.stringify(legacySpotRecords)&&$('dailyList').querySelector('.check-card,.empty')){await hydratePrivatePhotos();return;}
+ if(JSON.stringify(rows)===JSON.stringify(dailyRecords)&&JSON.stringify(spots)===JSON.stringify(legacySpotRecords)&&$('dailyList').querySelector('.check-card,.empty')){await hydratePrivatePhotos({recoverFailures:true});return;}
  dailyRecords=rows;legacySpotRecords=spots;renderDailyCheckins([...rows,...spots.map(row=>({...row,source_kind:'spot',author_id:null,content:(row.spot_name||'历史地点')+(row.spot_date?' · '+row.spot_date:'')}))].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)));syncRightRecordPanelsOnly();
- await hydratePrivatePhotos(); if(isCurrent(epoch))cleanupOrphanPhotos();
+ await hydratePrivatePhotos({recoverFailures:true}); if(isCurrent(epoch))cleanupOrphanPhotos();
 }
 function renderDailyCheckins(rows){
  const list=$('dailyList');

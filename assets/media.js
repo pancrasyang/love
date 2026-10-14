@@ -34,7 +34,7 @@ function resetPhotoLoads(){
 window.pausePhotoLoads=()=>{photoPaused=true;};
 window.resumePhotoLoads=owner=>{
  if(photoOwner!==owner){resetPhotoLoads();photoOwner=owner;}
- else if(photoPaused)photoJobs.forEach(job=>{if(job.state==='ready'){job.state='idle';job.meta=null;}});
+ else if(photoPaused)photoJobs.forEach(job=>{if(['ready','error','aborted'].includes(job.state)){job.state='idle';job.meta=null;}});
  photoPaused=false;photoJobs.forEach(job=>{if(job.state==='ready')showPhoto(job);else queuePhoto(job);});pumpPhotos();
 };
 function photoDescriptor(img){
@@ -101,7 +101,7 @@ function pumpPhotos(){
   }).catch(error=>{
    if(!photoLive(job))return;
    if(job.controller.signal.aborted){job.state='aborted';if(!photoPaused)showPhotoFailure(job,photoError('MEDIA_TIMEOUT','照片加载超时，请重试'));}
-   else{job.state='error';showPhotoFailure(job,error);}
+   else{job.state='error';job.error=error;showPhotoFailure(job,error);}
   }).finally(()=>{clearTimeout(timer);mediaRequests.delete(job.controller);photoActive--;pumpPhotos();settlePhotoWaiters();updatePhotoCacheStatus();});
  }
  settlePhotoWaiters();
@@ -110,7 +110,7 @@ const photoObserver=typeof IntersectionObserver==='function'?new IntersectionObs
  for(const {target,isIntersecting} of entries){target._photoVisible=isIntersecting;const job=photoBindings.get(target);if(job)queuePhoto(job);}pumpPhotos();
 },{rootMargin:'300px 0px'}):null;
 function updateFallbackVisibility(){if(photoObserver)return;for(const [img,job] of photoBindings){const rect=img.getBoundingClientRect();img._photoVisible=rect.bottom>=-300&&rect.top<=innerHeight+300;queuePhoto(job);}pumpPhotos();}
-async function hydratePrivatePhotos(){
+async function hydratePrivatePhotos({recoverFailures=false}={}){
  if(!currentProfile||photoPaused)return;
  for(const [img,job] of photoBindings){if(img.isConnected)continue;photoObserver?.unobserve(img);photoBindings.delete(img);job.images.delete(img);}
  for(const job of photoJobs.values())if(!job.images.size){job.controller?.abort();dropPhotoUrl(job);photoJobs.delete(job.ref);}
@@ -122,6 +122,7 @@ async function hydratePrivatePhotos(){
   img.onerror=()=>{if(!photoLive(job))return;photoCache.remove(job.cacheId);dropPhotoUrl(job);job.state='error';showPhotoFailure(job,photoError('MEDIA_DECODE','照片解码失败，请重试'));};
   photoObserver?.observe(img);
  }
+ for(const job of photoJobs.values()){if(job.state==='error'){if(recoverFailures){job.state='idle';job.meta=null;}else showPhotoFailure(job,job.error||photoError('MEDIA_UNKNOWN'));}queuePhoto(job);}
  updateFallbackVisibility();pumpPhotos();
  if(!photoObserver&&photoActive)await new Promise(resolve=>photoWaiters.push(resolve));
 }
