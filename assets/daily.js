@@ -40,15 +40,15 @@ function renderDailyCheckins(rows){
  const existing=new Map([...list.children].map(card=>[card.dataset.recordId,card]));
  const cards=rows.map(item=>{
   const mine=item.author_id===currentProfile.id;
-  const photo=item.photo_key?`<img data-media-key="${escapeHtml(item.photo_key)}" alt="正在加载私人照片" loading="lazy">`:(item.photo_url||item.photo_path)?`<img data-legacy-kind="${item.source_kind||'daily'}" data-legacy-id="${escapeHtml(item.id)}" alt="正在加载历史照片" loading="lazy">`:'';
-  const markup=`<article class="check-card" data-record-id="${escapeHtml(item.id)}">${photo}<div class="check-body"><div class="meta-row"><span class="tag">${item.source_kind==='spot'?'📍 历史地点':'📝 '+escapeHtml(nameOf(item.author_id))}</span><span>⏰ ${escapeHtml(formatDateTime(item.created_at))}</span></div><p>${escapeHtml(item.content)}</p>${mine?`<div class="card-actions"><button class="ghost small-button" data-action="edit" data-id="${escapeHtml(item.id)}">编辑文字</button><button class="danger small-button" data-action="delete" data-id="${escapeHtml(item.id)}">删除</button></div>`:''}</div></article>`;
+  const photo=item.photo_key?`<img data-media-key="${escapeHtml(item.photo_key)}" data-photo-variant="thumbnail" alt="正在加载私人照片" loading="lazy">`:(item.photo_url||item.photo_path)?`<img data-legacy-kind="${item.source_kind||'daily'}" data-legacy-id="${escapeHtml(item.id)}" alt="正在加载历史照片" loading="lazy">`:'';
+  const markup=`<article class="check-card" data-record-id="${escapeHtml(item.id)}">${photo}<div class="check-body"><div class="meta-row"><span class="tag">${item.source_kind==='spot'?'📍 历史地点':'📝 '+escapeHtml(nameOf(item.author_id))}</span><span>⏰ ${escapeHtml(formatDateTime(item.created_at))}</span></div><p>${escapeHtml(item.content)}</p>${item.photo_key?`<button type="button" class="ghost small-button" data-view-photo="${escapeHtml(item.photo_key)}">查看原图</button>`:''}${mine?`<div class="card-actions"><button class="ghost small-button" data-action="edit" data-id="${escapeHtml(item.id)}">编辑文字</button><button class="danger small-button" data-action="delete" data-id="${escapeHtml(item.id)}">删除</button></div>`:''}</div></article>`;
   const old=existing.get(String(item.id)),holder=document.createElement('template');holder.innerHTML=markup;const card=holder.content.firstElementChild;
   const before=old?.querySelector('img'),after=card.querySelector('img');
-  if(before&&after&&before.dataset.mediaKey===after.dataset.mediaKey&&before.dataset.legacyId===after.dataset.legacyId&&before.dataset.legacyKind===after.dataset.legacyKind)after.replaceWith(before);
+  if(before&&after&&before.dataset.mediaKey===after.dataset.mediaKey&&before.dataset.photoVariant===after.dataset.photoVariant&&before.dataset.legacyId===after.dataset.legacyId&&before.dataset.legacyKind===after.dataset.legacyKind)after.replaceWith(before);
   return card;
  });
  list.replaceChildren(...cards);
- photoCache.prune(currentProfile.id,new Set(cards.map(card=>card.querySelector('img')).filter(Boolean).map(img=>photoDescriptor(img).ref)));
+ photoCache.prune(currentProfile.id,new Set(cards.map(card=>card.querySelector('img')).filter(Boolean).flatMap(img=>[photoDescriptor(img).ref,...(img.dataset.mediaKey?['r2:'+img.dataset.mediaKey]:[])])));
 }
 function editDailyCheckin(id){
  const item=dailyRecords.find(r=>r.id===id&&r.author_id===currentProfile?.id);if(!item||dailyBusy)return;

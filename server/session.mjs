@@ -36,6 +36,9 @@ export async function validate(token){
  const r=await upstream('/auth/v1/user',token,{},'AUTH');if(!r.ok)authFailure(r,'AUTH_USER','身份验证失败，请重新登录');const user=await r.json();if(!user.id)throw new ApiError(503,'身份服务响应异常','AUTH_USER_RESPONSE');
  const p=await upstream(`/rest/v1/profiles?id=eq.${encodeURIComponent(user.id)}&select=id,role,display_name`,token,{},'PROFILE');if(!p.ok)authFailure(p,'PROFILE_ACCESS','账号权限验证失败，请重新登录',{profile:true});const rows=await p.json();if(!Array.isArray(rows))throw new ApiError(503,'账号权限服务响应异常','PROFILE_RESPONSE');if(rows.length!==1||!['pengpeng','kaikai'].includes(rows[0].role))throw new ApiError(401,'此账号未获授权或会话已退出','PROFILE_DENIED');return {user:{id:user.id},profile:rows[0]};
 }
+// Only the photo proxy may delegate validation to the authoritative Worker.
+// This reads/refreshes the HttpOnly cookie; it never authorizes a data operation.
+export async function photoCredentials(req,res){try{let data=readSession(req);if(!data)throw new ApiError(401,'请先登录','SESSION_REQUIRED');if(data.expires_at<Date.now()/1000+60)data=setSession(res,await refresh(data.refresh_token));return data;}catch(error){if(error instanceof ApiError&&error.status===401)clearSession(res);throw error;}}
 export async function authenticate(req,res,{optional=false}={}){try{let data=readSession(req);if(!data){if(optional)return null;throw new ApiError(401,'请先登录','SESSION_REQUIRED');}if(data.expires_at<Date.now()/1000+60)data=setSession(res,await refresh(data.refresh_token));return {...data,...await validate(data.access_token)};}catch(error){if(error instanceof ApiError&&error.status===401)clearSession(res);throw error;}}
 export function browserSession(data){return {access_token:data.access_token,expires_at:data.expires_at,user:data.user};}
 export async function revoke(token){const r=await upstream('/auth/v1/logout?scope=local',token,{method:'POST'},'AUTH');if(!r.ok&&r.status!==401)throw new ApiError(503,'退出失败，请联网后重试','AUTH_LOGOUT');}

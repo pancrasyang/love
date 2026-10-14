@@ -2,10 +2,10 @@ import {inspectImage,MAX_BYTES} from './image-type.mjs';
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const KEY=/^(?:daily|spot)\/[0-9a-f-]{36}\/(?:[0-9a-f-]{36}|legacy)\/[a-f0-9-]+\.(?:jpg|png|webp)$/;
 class HttpError extends Error{constructor(status,message,code='MEDIA_REQUEST'){super(message);this.status=status;this.code=code;}}
-async function limitedBody(request){
- if(Number(request.headers.get('content-length'))>MAX_BYTES)throw new HttpError(413,'图片不能超过 10MB');
+async function limitedBody(request,limit=MAX_BYTES){
+ if(Number(request.headers.get('content-length'))>limit)throw new HttpError(413,'图片不能超过 10MB');
  const reader=request.body?.getReader();if(!reader)throw new HttpError(400,'图片为空');let n=0;const chunks=[];
- try{for(;;){const {value,done}=await reader.read();if(done)break;n+=value.length;if(n>MAX_BYTES){await reader.cancel();throw new HttpError(413,'图片不能超过 10MB');}chunks.push(value);}}finally{reader.releaseLock();}
+ try{for(;;){const {value,done}=await reader.read();if(done)break;n+=value.length;if(n>limit){await reader.cancel();throw new HttpError(413,'图片不能超过 10MB');}chunks.push(value);}}finally{reader.releaseLock();}
  const bytes=new Uint8Array(n);let pos=0;for(const c of chunks){bytes.set(c,pos);pos+=c.length;}return bytes;
 }
 async function handle(request,env,trace){
@@ -14,8 +14,10 @@ async function handle(request,env,trace){
   try{const result=await action();trace.stages.push({stage,status:result?.status||200,elapsed_ms:Date.now()-began});return result;}
   catch(error){if(error instanceof HttpError)error.stage=stage;trace.stages.push({stage,status:error.status||503,elapsed_ms:Date.now()-began});throw error;}
  }
+ const photoProtocol=new URL(request.url).searchParams.get('photo')==='1';
  const origin=request.headers.get('Origin');const allowed=(env.ALLOWED_ORIGINS||'').split(',').map(s=>s.trim()).filter(Boolean);
  const headers=new Headers({'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Vary':'Origin'});
+ if(photoProtocol)headers.set('X-Love-Photo-Protocol','2');
  const json=(body,status=200)=>{if(body.code)trace.code=body.code;return new Response(JSON.stringify(status>=400?{...body,request_id:trace.request_id,stage:trace.stage}:body),{status,headers:new Headers([...headers,['Content-Type','application/json']])});};
  if(!allowed.length)return json({error:'文件服务尚未配置',code:'MEDIA_CONFIG'},503);
  if(origin&&!allowed.includes(origin))return json({error:'来源不允许',code:'MEDIA_ORIGIN_DENIED'},403);
@@ -59,7 +61,57 @@ async function handle(request,env,trace){
   let key;try{key=decodeURIComponent(path.slice('/api/media/'.length));}catch{throw new HttpError(400,'文件编号不正确');}
   if(!KEY.test(key))throw new HttpError(400,'文件编号不正确');
   const rows=await rest(`/rest/v1/media_objects?key=eq.${encodeURIComponent(key)}&select=*`);
-  const row=rows?.[0];if(!row)throw new HttpError(404,'文件不存在或无权访问');
+  const row=rows?.[0];if(!Array.isArray(rows)||rows.length!==1||!row)throw new HttpError(404,'文件不存在或无权访问');
+  if(url.searchParams.get('photo')==='1'){
+   headers.set('X-Love-Photo-Protocol','2');
+   const variant=url.searchParams.get('variant')||'original';
+   if(!['original','thumbnail'].includes(variant)||!['GET','HEAD','POST'].includes(request.method))throw new HttpError(400,'照片参数不正确','MEDIA_INPUT');
+   if(row.state!=='ready')throw new HttpError(404,'照片不存在','MEDIA_NOT_FOUND');
+   if(!UUID.test(row.record_id||'')||!['daily','spot'].includes(row.business_type)||!key.startsWith(row.business_type+'/'))throw new HttpError(503,'照片关联异常','MEDIA_ASSOCIATION');
+   const table=row.business_type==='daily'?'daily_checkins':'spot_checkins';
+   const records=await rest(`/rest/v1/${table}?id=eq.${row.record_id}&photo_key=eq.${encodeURIComponent(key)}&select=id`,{},'business');
+   if(!Array.isArray(records)||records.length!==1)throw new HttpError(404,'照片未关联有效记录','MEDIA_NOT_FOUND');
+   if(!Number.isInteger(row.size_bytes)||row.size_bytes<=0||row.size_bytes>MAX_BYTES||!['image/jpeg','image/png','image/webp'].includes(row.content_type)||!/^[a-f0-9]{64}$/.test(row.sha256||''))throw new HttpError(503,'照片登记异常','MEDIA_METADATA');
+   const original={size:row.size_bytes,type:row.content_type,version:row.sha256,sha256:row.sha256,variant:'original',source_version:row.sha256};
+   const derivedKey=`derived/thumbnail-v1/${row.sha256}/${key}.webp`;
+   if(request.method==='POST'){
+    if(variant!=='thumbnail'||url.searchParams.get('version')!==row.sha256)throw new HttpError(412,'照片版本已改变','MEDIA_VERSION_CHANGED');
+    const secret=env.LOVE_PHOTO_PROXY_SECRET;
+    if(typeof secret!=='string'||secret.length<32)throw new HttpError(503,'缩略图服务尚未配置','MEDIA_THUMBNAIL_CONFIG');
+    const bytes=await limitedBody(request,512*1024),stamp=request.headers.get('X-Photo-Timestamp'),proof=request.headers.get('X-Photo-Proof');
+    if(!/^\d{13}$/.test(stamp||'')||Math.abs(Date.now()-Number(stamp))>60000||!/^[a-f0-9]{64}$/.test(proof||''))throw new HttpError(403,'缩略图写入验证失败','MEDIA_THUMBNAIL_PROOF');
+    const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
+    const material=JSON.stringify([key,row.sha256,hash,bytes.length,stamp]);
+    const signingKey=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['verify']);
+    const signature=Uint8Array.from(proof.match(/../g),b=>parseInt(b,16));
+    if(!await crypto.subtle.verify('HMAC',signingKey,signature,new TextEncoder().encode(material)))throw new HttpError(403,'缩略图写入验证失败','MEDIA_THUMBNAIL_PROOF');
+    let image;try{image=inspectImage(bytes,'image/webp');}catch{throw new HttpError(415,'缩略图格式异常','MEDIA_FORMAT');}
+    if(image.byteLength!==bytes.length)throw new HttpError(415,'缩略图内容异常','MEDIA_FORMAT');
+    await measure('r2_thumbnail_write',()=>env.LOVE_MEDIA.put(derivedKey,bytes,{httpMetadata:{contentType:'image/webp'},customMetadata:{sourceVersion:row.sha256,sha256:hash}}));
+    return json({size:bytes.length,type:'image/webp',version:hash,sha256:hash,variant:'thumbnail',source_version:row.sha256},201);
+   }
+   let meta=original,object;
+   if(variant==='thumbnail'){
+    object=await measure('r2_thumbnail_read',()=>env.LOVE_MEDIA.head?env.LOVE_MEDIA.head(derivedKey):env.LOVE_MEDIA.get(derivedKey));
+    if(!object)return json({error:'缩略图尚未生成',code:'MEDIA_VARIANT_NOT_FOUND',original},404);
+    const hash=object.customMetadata?.sha256;
+    if(object.customMetadata?.sourceVersion!==row.sha256||!/^[a-f0-9]{64}$/.test(hash||'')||!Number.isInteger(object.size)||object.size<=0||object.size>512*1024||object.httpMetadata?.contentType!=='image/webp'){await object.body?.cancel?.();throw new HttpError(503,'缩略图登记异常','MEDIA_METADATA');}
+    meta={size:object.size,type:'image/webp',version:hash,sha256:hash,variant:'thumbnail',source_version:row.sha256};
+   }
+   const expected=url.searchParams.get('version');
+   if(expected!==null&&expected!==meta.version){await object?.body?.cancel?.();throw new HttpError(412,'照片版本已改变','MEDIA_VERSION_CHANGED');}
+   if(url.searchParams.get('meta')==='1'){await object?.body?.cancel?.();return json(meta);}
+   const rangeHeader=request.headers.get('Range');let range;
+   if(rangeHeader){const m=rangeHeader.match(/^bytes=(\d+)-(\d+)$/);if(!m)throw new HttpError(416,'文件分段范围不正确','MEDIA_RANGE_INVALID');const start=Number(m[1]),end=Number(m[2]);if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start<0||end<start||start>=meta.size)throw new HttpError(416,'文件分段范围不正确','MEDIA_RANGE_INVALID');range={offset:start,length:Math.min(end,meta.size-1)-start+1};}
+   if(object&&(range||!object.body)){await object.body?.cancel?.();object=null;}
+   if(!object)object=await measure('r2_read',()=>env.LOVE_MEDIA.get(variant==='thumbnail'?derivedKey:key,range?{range}:undefined));
+   if(!object)throw new HttpError(404,'文件不存在','MEDIA_NOT_FOUND');
+   if(object.size!==meta.size){await object.body?.cancel?.();throw new HttpError(503,'文件大小与登记不一致','MEDIA_METADATA_MISMATCH');}
+   headers.set('Content-Type',meta.type);headers.set('Content-Length',String(range?.length||meta.size));headers.set('X-Media-Version',meta.version);headers.set('X-Media-Source-Version',meta.source_version);headers.set('X-Media-Variant',meta.variant);headers.set('ETag','"'+meta.version+'"');headers.set('Accept-Ranges','bytes');
+   if(range)headers.set('Content-Range',`bytes ${range.offset}-${range.offset+range.length-1}/${meta.size}`);
+   if(request.method==='HEAD'){await object.body?.cancel?.();return new Response(null,{headers});}
+   return new Response(object.body,{status:range?206:200,headers});
+  }
   if(request.method==='GET'||request.method==='HEAD'){
    if(row.state!=='ready')throw new HttpError(404,'文件已删除');
    const rangeHeader=request.headers.get('Range');let range;
@@ -77,6 +129,8 @@ async function handle(request,env,trace){
    if(row.owner_id!==user.id)throw new HttpError(403,'只能删除自己的照片');
    const canDelete=await rest('/rest/v1/rpc/begin_media_delete',{method:'POST',body:JSON.stringify({media_key:key})},'begin_delete');
    if(!canDelete)throw new HttpError(404,'文件不存在');
+   // Derivatives are private and inaccessible once the original is deleting.
+   if(row.sha256)await measure('r2_thumbnail_delete',()=>env.LOVE_MEDIA.delete(`derived/thumbnail-v1/${row.sha256}/${key}.webp`));
    await measure('r2_delete',()=>env.LOVE_MEDIA.delete(key));
    await rest('/rest/v1/rpc/finish_media_delete',{method:'POST',body:JSON.stringify({media_key:key})},'finish_delete');
    return new Response(null,{status:204,headers});
