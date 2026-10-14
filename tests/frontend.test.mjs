@@ -1,19 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';import vm from 'node:vm';import {JSDOM} from 'jsdom';import {IDBFactory} from 'fake-indexeddb';
-const A='00000000-0000-4000-8000-000000000001',B='00000000-0000-4000-8000-000000000002';
-async function app({missingSdk=false,brokenSdk=false,cacheFactory=new IDBFactory(),observer=false}={}){
- const html=readFileSync('index.html','utf8');const dom=new JSDOM(html,{url:'https://love.invalid',runScripts:'outside-only'}),w=dom.window;
- let session=null,listener,reads=0,intersection;const observed=new Set(),revoked=[];if(observer)w.IntersectionObserver=class{constructor(fn){intersection=fn;}observe(img){observed.add(img)}unobserve(img){observed.delete(img)}};
- w.Blob=Blob;w.indexedDB=cacheFactory;w.clearTimeout=()=>{};
- const rows={profiles:[{id:A,role:'pengpeng',display_name:'朋朋'},{id:B,role:'kaikai',display_name:'开开'}],daily_checkins:[],mood_records:[],media_objects:[],spot_checkins:[]};
- const sb={auth:{async getSession(){return {data:{session}}},async getUser(){return {data:{user:session?.user}}},async setSession(tokens){session={...tokens,user:{id:A}};return {}},async signOut(){session=null;listener?.('SIGNED_OUT');return {}},onAuthStateChange(fn){listener=fn;return {data:{subscription:{unsubscribe(){}}}}}},from(table){reads++;let action='select',value,filters=[];const q={select(){return q},order(){return q},range(){return q},or(){return q},eq(k,v){filters.push([k,v]);return q},insert(v){action='insert';value=v;return q},upsert(v){action='upsert';value=v;return q},update(v){action='update';value=v;return q},delete(){action='delete';return q},then(resolve,reject){let data=rows[table].filter(r=>filters.every(([k,v])=>r[k]===v)).map(r=>({...r}));if(action==='upsert'){rows[table].push({id:'new',...value});data=[value]}if(action==='insert'){rows[table].push({author_id:session.user.id,...value});data=[value]}if(action==='delete')rows[table]=rows[table].filter(r=>!data.includes(r));return Promise.resolve({data,error:null}).then(resolve,reject)}};return q}};
- if(!missingSdk)w.supabase={createClient(){if(brokenSdk)throw Error('Initialization failed');return sb}};w.alert=()=>{};w.confirm=()=>true;w.setTimeout=()=>0;w.setInterval=()=>0;w.URL.createObjectURL=()=> 'blob:test';w.URL.revokeObjectURL=u=>revoked.push(u);w.HTMLElement.prototype.scrollIntoView=()=>{};
- w.fetch=async()=>({ok:true,json:async()=>({access_token:'test',refresh_token:'test'})});
- w.createLoveClient=()=>w.supabase.createClient();
- const context=dom.getInternalVMContext();
- for(const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)){const src=m[1].match(/src="([^"]+)"/);if(src){if(src[1].startsWith('http')||src[1].startsWith('assets/vendor/')||src[1]==='assets/session-client.js')continue;vm.runInContext(readFileSync(src[1],'utf8'),context,{filename:src[1]});}else vm.runInContext(m[2],context,{filename:'index.inline.js'});}
- const run=code=>vm.runInContext(code,context);
- return {w,dom,rows,run,revoked,visible(indices){const images=[...observed];intersection(images.map((target,i)=>({target,isIntersecting:indices.includes(i)})));},async idle(){for(let i=0;i<300;i++){if(run('photoActive===0&&photoQueue.length===0'))return;await new Promise(r=>setTimeout(r,5));}throw Error('Photo queue did not settle');},reads:()=>reads,login(id=A){session={access_token:'test',user:{id}}},expire(){session=null},async close(){run('clearPrivateView()');dom.window.close()}};
-}
+import test from 'node:test';import assert from 'node:assert/strict';import {IDBFactory} from 'fake-indexeddb';import {app,A,B} from './browser-harness.mjs';
 test('missing or broken local SDK keeps login gated and shows a recoverable error',async()=>{
  for(const options of [{missingSdk:true},{brokenSdk:true}]){
   const a=await app(options);try{
@@ -54,3 +39,59 @@ test('a new page uses persistent cached bytes after authorization; unsigned user
 test('photo version replacement and record deletion invalidate persistent cache',async()=>{const a=await app();try{a.login();addPhotos(a,1);let version='v1',downloads=0;a.w.fetch=async url=>{if(url.includes('part='))downloads++;return servePhoto(url,version)};await a.run('restoreSession()');version='v2';await a.run('restoreSession()');assert.equal(downloads,2);assert.equal((await a.run('photoCache.stats()')).count,1);a.rows.daily_checkins=[];await a.run('loadDailyCheckins()');await new Promise(r=>setTimeout(r,15));assert.equal((await a.run('photoCache.stats()')).count,0)}finally{a.close()}});
 test('the preserved historical spot photo has a read-only card',async()=>{const a=await app();try{a.login();a.rows.spot_checkins.push({id:A,spot_name:'old location',spot_date:'2026-01-01',created_at:'2026-01-01T00:00:00Z',photo_path:'old.jpg'});a.w.fetch=async url=>servePhoto(url);await a.run('restoreSession()');assert.match(a.w.document.getElementById('dailyList').textContent,/历史地点/);assert.equal(a.w.document.querySelector('[data-legacy-kind]').dataset.legacyKind,'spot');assert.equal(a.w.document.querySelector('[data-action]'),null)}finally{a.close()}});
 test('failed photos keep retry controls through rerender and recover with unchanged records',async()=>{const a=await app();try{a.login();addPhotos(a,1);let healthy=false;a.w.fetch=async url=>url.includes('meta=1')||healthy?servePhoto(url):{ok:false,status:503,json:async()=>({error:'temporary outage',code:'MEDIA_SOURCE_UNAVAILABLE'})};await a.run('restoreSession()');assert(a.w.document.querySelector('.photo-retry'));a.rows.daily_checkins[0]={...a.rows.daily_checkins[0],content:'edit while unavailable'};await a.run('loadDailyCheckins()');assert(a.w.document.querySelector('.photo-retry'));healthy=true;await a.run('loadDailyCheckins()');assert.equal(a.w.document.querySelector('[data-media-key]').src,'blob:test');assert.equal(a.w.document.querySelector('.photo-retry'),null)}finally{a.close()}});
+
+test('a failed record source leaves the other source and its photos usable, including after focus restoration',async()=>{
+ for(const table of ['spot_checkins','daily_checkins']){
+  const sourceErrors={},a=await app({sourceErrors});
+  try{
+   a.login();addPhotos(a,1);a.rows.spot_checkins.push({id:'spot',spot_name:'old place',created_at:'2026-01-01',photo_path:'old.jpg'});a.w.fetch=async url=>servePhoto(url);
+   await a.run('restoreSession()');
+   sourceErrors[table]={message:'temporary outage',code:'UPSTREAM_NETWORK'};
+   await a.run('restoreSession()');
+   assert.equal(a.run('photoPaused'),false);assert(!a.w.document.getElementById('privateApp').hidden);
+   assert.equal(a.w.document.querySelectorAll('.check-card').length,1);
+   assert.equal(a.w.document.querySelector('.check-card img').src,'blob:test');
+   assert.match(a.w.document.querySelector('.record-source-error').textContent,table==='spot_checkins'?/历史地点/:/日常记录/);
+   delete sourceErrors[table];await a.run('loadDailyCheckins()');
+   assert.equal(a.w.document.querySelectorAll('.check-card').length,2);assert.equal(a.w.document.querySelector('.record-source-error'),null);
+  }finally{await a.close()}
+ }
+});
+
+test('an initial historical source outage does not strand the list or photo queue',async()=>{
+ const a=await app({sourceErrors:{spot_checkins:{message:'unavailable'}}});
+ try{a.login();addPhotos(a,1);a.w.fetch=async url=>servePhoto(url);await a.run('restoreSession()');assert.equal(a.run('photoPaused'),false);assert.equal(a.w.document.querySelector('[data-media-key]').src,'blob:test');assert(!a.w.document.querySelector('.loading'));assert(a.w.document.querySelector('[data-action="retry"]'));}finally{await a.close()}
+});
+
+test('photo source refusal stays local; confirmed session expiry clears the private view',async()=>{
+ for(const [status,code,cleared] of [[401,'MEDIA_SOURCE_DENIED',false],[403,'MEDIA_SOURCE_DENIED',false],[429,'MEDIA_SOURCE_RATE_LIMITED',false],[503,'MEDIA_SOURCE_UNAVAILABLE',false],[401,'SESSION_INVALID',true],[401,'PROFILE_DENIED',true]]){
+  const a=await app();
+  try{
+   a.login();addPhotos(a,1);a.w.fetch=async()=>({ok:false,status,json:async()=>({error:'request failed',code,request_id:'diagnostic-id',stage:'legacy_storage'})});
+   await a.run('restoreSession()');assert.equal(a.w.document.getElementById('privateApp').hidden,cleared,code);
+   if(!cleared){assert(a.w.document.querySelector('.photo-retry'));assert.equal(a.run('currentProfile.id'),A);}
+  }finally{await a.close()}
+ }
+});
+
+test('temporary session verification failure preserves the view with a retry, while revoked sessions clear it',async()=>{
+ const authErrors={},a=await app({authErrors});
+ try{
+  a.login();addPhotos(a,1);a.w.fetch=async url=>servePhoto(url);await a.run('restoreSession()');
+  authErrors.session={code:'AUTH_USER_RATE_LIMITED',message:'rate limited'};await a.run('restoreSession()');
+  assert(!a.w.document.getElementById('privateApp').hidden);assert.equal(a.w.document.querySelectorAll('.check-card').length,1);assert.equal(a.run('photoPaused'),true);assert(a.w.document.querySelector('.session-retry'));
+  delete authErrors.session;await a.run('restoreSession()');assert.equal(a.run('photoPaused'),false);assert.equal(a.w.document.querySelector('.session-retry'),null);
+  authErrors.session={code:'SESSION_INVALID',message:'expired'};await a.run('restoreSession()');assert(a.w.document.getElementById('privateApp').hidden);assert.equal(a.w.document.querySelector('.check-card'),null);
+ }finally{await a.close()}
+});
+
+test('an expired-photo response arriving after an account switch cannot sign out the new account',async()=>{
+ const a=await app({observer:true});
+ try{
+  a.login();addPhotos(a,1);let finish;a.w.fetch=()=>new Promise(resolve=>finish=resolve);
+  await a.run('restoreSession()');a.visible([0]);while(!finish)await new Promise(resolve=>setImmediate(resolve));
+  await a.run('logout()');a.login(B);a.w.fetch=async url=>servePhoto(url);await a.run('restoreSession()');a.visible([0]);
+  finish({ok:false,status:401,json:async()=>({code:'SESSION_INVALID',error:'old session expired'})});await a.idle();
+  assert(!a.w.document.getElementById('privateApp').hidden);assert.equal(a.run('currentProfile.id'),B);assert.equal(a.w.document.querySelector('[data-media-key]').src,'blob:test');
+ }finally{await a.close()}
+});

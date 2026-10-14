@@ -181,3 +181,15 @@ IntersectionObserver只调度可见区域及附近照片，全页面最多两个
 新增 `20261014002953_love_v21_legacy_storage_readonly.sql` 已应用生产：普通anon/authenticated角色不能上传、改写或删除love-photos旧对象，旧读取及service-role迁移通道保持可用，其他桶权限不变。旧桶仍公开，15张历史照片尚无R2关联；完整迁移和设备验收通过后再封闭旧桶公开读取，不删除原图。迁移仍需要受限的R2凭据；没有凭据不能把源文件预检写为R2迁移成功。
 
 新增回归覆盖持久缓存、未登录隔离、LRU/TTL、清缓存与未完成下载竞争、懒加载、并发去重、焦点恢复、版本/删除失效、只读旧地点、6MiB同源Worker/R2分段链路、匿名/失效会话拒绝、Range/超时/404/503/超限诊断，以及迁移MIME不符时不关联记录。真实iPhone/安卓无VPN测试仍需要在生产设备上完成。
+
+## 照片故障隔离与诊断
+
+日常和历史地点分别加载，某个来源失败时显示该来源的重试入口，其余成功记录及照片继续显示。列表不完整时不执行孤立照片清理。焦点复核遇到临时身份服务故障时保留现有视图、暂停照片调度并提供“重试验证”；确认会话失效或成员资格已撤销时才清空私人视图。照片源的 401/403 只影响对应照片，旧账号已取消请求的迟到响应不能清空新账号。
+
+Auth、profiles 和续期的 429 返回限流错误，5xx 返回服务不可用，均不使 Cookie 过期；profiles 接口的 403 与成功查询后发现成员资格已撤销分别处理。Worker 也区分上游限流、权限拒绝、网络失败和服务故障。
+
+Vercel 接口返回 `X-Love-Request-Id`，照片接口另外保留 `X-Photo-Request-Id`，并将该编号传给 Worker。错误 JSON 包含 `request_id`、`stage`；Worker 提供阶段头时，照片代理还返回 `upstream_stage`。使用请求编号关联两端的结构化日志，检查 `auth`、`profile`、`registry`、`business`、`legacy_storage`、`worker`、`photo_body` 和 Worker 的 `r2_read` 等阶段及耗时。Vercel 上游 fetch 耗时记录到响应头返回，照片正文读取另外计时；Worker 返回流后的传输错误仍由代理正文阶段捕获。应用日志不写入令牌、Cookie、账户编号、照片路径或内容。
+
+Worker 配置启用结构化日志，关闭自动请求调用日志，避免自动采集含照片路径的请求 URL。通过 Dashboard 粘贴 Worker 的部署方式还需在该服务设置中启用日志、关闭 Invocation logs；仓库配置仅在对应配置部署生效后应用。更新 Worker 源码后运行 `node scripts/build-worker.mjs` 同步 Dashboard 文件，再运行 `npm test`、`npm run check` 和 `node scripts/build.mjs`。本地验证不代表 Vercel、Worker 已发布或真实设备已验收；历史迁移和旧桶隐私收口仍单独进行。
+
+照片分段现支持有上限的自动重试，以及同账号、同版本的已完成分段复用；版本变化、权限拒绝或完整性错误会丢弃未完成数据。历史来源缺少强 ETag 时保守地重新读取整图。未完成分段仅留在页面内存，超过 5 分钟不再复用，保留量上限 40MiB；每次恢复仍重新鉴权。运行 `node scripts/benchmark-photos.mjs` 可复现本地合成基准，详见[恢复边界与测量结果](docs/photo-transfer-performance.md)。鉴权请求合并、生产设备验收、历史迁移和旧桶隐私收口仍分别进行。

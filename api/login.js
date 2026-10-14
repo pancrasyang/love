@@ -1,5 +1,6 @@
+import {withDiagnostics} from '../server/diagnostics.mjs';
 import {privateResponse,csrf,upstream,validate,setSession,browserSession,revoke,ApiError,failure} from '../server/session.mjs';
-export default async function handler(req,res){privateResponse(res);try{
+export default function handler(req,res){return withDiagnostics(res,async()=>{privateResponse(res);try{
  if(req.method!=='POST')throw new ApiError(405,'请求方式不支持','LOGIN_METHOD');csrf(req);
  if(!String(req.headers['content-type']||'').startsWith('application/json'))throw new ApiError(415,'请求格式不正确','LOGIN_FORMAT');
  const {role,password}=req.body||{};
@@ -10,4 +11,4 @@ export default async function handler(req,res){privateResponse(res);try{
  const data=await r.json();let identity;
  try{identity=await validate(data.access_token);if(identity.profile.role!==role)throw new ApiError(403,'此账号未获授权','LOGIN_ROLE');}catch(error){try{await revoke(data.access_token);}catch{}throw error;}
  return res.status(200).json(browserSession({...setSession(res,data),...identity}));
-}catch(error){return failure(res,error);}}
+}catch(error){return failure(res,error);}});}

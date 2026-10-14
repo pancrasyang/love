@@ -6,6 +6,8 @@ let selectedRole=null;
 let authSubscription=null;
 const $=id=>document.getElementById(id);
 const isCurrent=epoch=>Boolean(currentProfile)&&epoch===authEpoch;
+const sessionFailureCodes=new Set(['SESSION_REQUIRED','SESSION_INVALID','AUTH_REFRESH','AUTH_USER','PROFILE_ACCESS','PROFILE_DENIED']);
+const isSessionFailure=error=>sessionFailureCodes.has(error?.code);
 function clientReady(){return typeof sb!=='undefined'&&Boolean(sb?.auth);}
 function showClientError(){
  $('privateApp').hidden=true;$('authGate').hidden=false;
@@ -33,24 +35,31 @@ function showRoleChoices(){selectedRole=null;$('roleChoices').hidden=false;$('pa
 async function restoreSession(){
  if(!clientReady()){showClientError();return;}
  window.pausePhotoLoads?.();
- const epoch=++authEpoch;
+ const epoch=++authEpoch;let restoredUserId=null;
  try {
   const {data:{session},error}=await sb.auth.getSession();
   if(error)throw error;
   if(epoch!==authEpoch)return;
   if(!session){clearPrivateView();showRoleChoices();$('authMessage').textContent='选择你的名字，回到我们的小日常。';return;}
+  restoredUserId=session.user.id;
   const {data:{user},error:ue}=await sb.auth.getUser();
-  if(ue||!user)throw ue||new Error('请重新登录');
+  if(ue||!user)throw ue||Object.assign(new Error('请重新登录'),{code:'SESSION_REQUIRED'});
   const {data,error:pe}=await sb.from('profiles').select('id,role,display_name');
-  if(pe)throw new Error((pe.message||'账号信息暂时无法读取')+(pe.code?'（'+pe.code+'）':''));
+  if(pe)throw Object.assign(new Error((pe.message||'账号信息暂时无法读取')+(pe.code?'（'+pe.code+'）':'')),{code:pe.code});
   if(epoch!==authEpoch)return;
   const profile=data.find(p=>p.id===user.id&&['pengpeng','kaikai'].includes(p.role));
-  if(!profile)throw new Error('此账号未获授权或登录已失效');
+  if(!profile)throw Object.assign(new Error('此账号未获授权或登录已失效'),{code:'PROFILE_DENIED'});
   currentProfile=profile; profileList=data;
   $('currentIdentity').textContent=`${profile.role==='pengpeng'?'☀️':'🌷'} ${profile.display_name}`;
   $('authGate').hidden=true;$('privateApp').hidden=false;$('loginPassword').value='';
+  if($('dailyStatus').querySelector('.session-retry'))$('dailyStatus').replaceChildren();
   await window.loadPrivateData();
- }catch(error){if(epoch===authEpoch){clearPrivateView();showRoleChoices();$('authMessage').textContent=(error.message||'登录验证失败，请重试')+(error.code?'（'+error.code+'）':'');}}
+ }catch(error){if(epoch===authEpoch){
+  if(currentProfile&&(!restoredUserId||restoredUserId===currentProfile.id)&&!isSessionFailure(error)){
+   setStatus('dailyStatus','暂时无法复核登录状态，请稍后重试。');
+   const button=document.createElement('button');button.type='button';button.className='ghost small-button session-retry';button.textContent='重试验证';button.onclick=restoreSession;$('dailyStatus').append(button);
+  }else{clearPrivateView();showRoleChoices();$('authMessage').textContent=(error.message||'登录验证失败，请重试')+(error.code?'（'+error.code+'）':'');}
+ }}
 }
 async function logout(){
  if(!clientReady()){showClientError();return;}

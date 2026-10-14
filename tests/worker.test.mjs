@@ -44,3 +44,21 @@ test('upload stores verified type and owner and rolls back metadata failure',asy
 test('private GET is no-store; partner cannot delete owner media',async()=>{const e=env();e.objects.set(KEY,PNG);await mock(async u=>authRoutes(u)||Response.json([{key:KEY,owner_id:B,content_type:'image/png',state:'ready'}]),async()=>{const r=await worker.fetch(request('/api/media/'+KEY),e);assert.equal(r.status,200);assert.equal(r.headers.get('Cache-Control'),'private, no-store');assert.equal((await worker.fetch(request('/api/media/'+KEY,'DELETE'),e)).status,403);assert.equal(e.objects.size,1)})});
 test('attached image cannot be removed, orphan deletion is recoverable',async()=>{const e=env();e.objects.set(KEY,PNG);let attached=true;await mock(async u=>{const auth=authRoutes(u);if(auth)return auth;if(u.includes('begin_media_delete'))return attached?new Response(null,{status:400}):Response.json(true);if(u.includes('finish_media_delete'))return Response.json(null);return Response.json([{key:KEY,owner_id:A,state:'ready'}])},async()=>{assert.equal((await worker.fetch(request('/api/media/'+KEY,'DELETE'),e)).status,403);assert.equal(e.objects.size,1);attached=false;assert.equal((await worker.fetch(request('/api/media/'+KEY,'DELETE'),e)).status,204);assert.equal(e.objects.size,0)})});
 test('authenticated R2 Range and HEAD return correct version and bounds without changing private access',async()=>{const e=env();e.objects.set(KEY,PNG);const sha=createHash('sha256').update(PNG).digest('hex');await mock(async u=>authRoutes(u)||Response.json([{key:KEY,owner_id:A,content_type:'image/png',size_bytes:PNG.length,sha256:sha,state:'ready'}]),async()=>{const r=await worker.fetch(request('/api/media/'+KEY,'GET',null,{Range:'bytes=10-19'}),e);assert.equal(r.status,206);assert.equal(r.headers.get('Content-Range'),`bytes 10-19/${PNG.length}`);assert.equal(r.headers.get('X-Media-Version'),sha);assert(Buffer.from(await r.arrayBuffer()).equals(PNG.subarray(10,20)));assert.equal((await worker.fetch(request('/api/media/'+KEY,'GET',null,{Range:'bytes=999-1000'}),e)).status,416);const h=await worker.fetch(request('/api/media/'+KEY,'HEAD'),e);assert.equal(h.status,200);assert.equal((await h.arrayBuffer()).byteLength,0);assert.equal(h.headers.get('Content-Length'),String(PNG.length))})});
+
+test('Worker distinguishes unavailable, rate-limited and forbidden upstream stages before touching R2',async()=>{
+ for(const stage of ['auth','profile','registry'])for(const status of [401,403,429,503]){
+  const e=env();let reached=false;e.LOVE_MEDIA.get=async()=>{reached=true;throw Error('unexpected R2 access')};
+  await mock(async url=>{
+   if(stage==='auth'&&url.endsWith('/auth/v1/user')||stage==='profile'&&url.includes('/profiles?')||stage==='registry'&&url.includes('/media_objects?'))return new Response(null,{status});
+   return authRoutes(url)||Response.json([]);
+  },async()=>{
+   const r=await worker.fetch(request('/api/media/'+KEY),e),body=await r.json();assert.equal(r.status,status);assert.equal(body.stage,stage);assert.equal(body.request_id,r.headers.get('X-Photo-Request-Id'));assert.match(body.code,status===429?/_RATE_LIMITED$/:status===503?/_UNAVAILABLE$/ : /_DENIED$/);assert.equal(reached,false);
+  });
+ }
+});
+
+test('Worker retains the upstream rate-limit wait for the same-origin photo proxy',async()=>{
+ await mock(async()=>new Response(null,{status:429,headers:{'Retry-After':'60'}}),async()=>{
+  const r=await worker.fetch(request('/api/media/'+KEY),env());assert.equal(r.status,429);assert.equal(r.headers.get('Retry-After'),'60');assert.equal((await r.json()).code,'AUTH_RATE_LIMITED');
+ });
+});
