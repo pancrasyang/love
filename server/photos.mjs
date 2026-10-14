@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
-import {privateResponse,authenticate,upstream,ApiError,failure} from './session.mjs';
+import {privateResponse,authenticate,photoCredentials,upstream,ApiError,failure} from './session.mjs';
+import {workerPhoto} from './photo-worker.mjs';
 import {measure,requestDiagnostics,withDiagnostics} from './diagnostics.mjs';
 const CHUNK=1048576,MAX=20*CHUNK,UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const KEY=/^(daily|spot)\/[0-9a-f-]{36}\/(?:[0-9a-f-]{36}|legacy)\/[a-f0-9-]+\.(?:jpg|png|webp)$/;
@@ -87,8 +88,13 @@ export function photoHandler(req,res){return withDiagnostics(res,async()=>{
   const url=new URL(req.url,'https://local.invalid'),source=url.searchParams.get('source'),partText=url.searchParams.get('part')||'0',metaOnly=url.searchParams.get('meta')==='1';
   const version=url.searchParams.get('version');
   if(!['legacy','r2'].includes(source)||!/^\d+$/.test(partText)||Number(partText)>=20||url.searchParams.getAll('version').length>1||(version!==null&&!/^[a-f0-9]{64}$/.test(version)))throw new ApiError(400,'照片参数不正确','MEDIA_INPUT');
-  const session=await authenticate(req,res),start=Number(partText)*CHUNK;
-  const {response,meta}=await (source==='legacy'?legacy:r2)(url,session.access_token,metaOnly,start);
+  const variant=url.searchParams.get('variant')||'original';
+  if(!['original','thumbnail'].includes(variant)||url.searchParams.getAll('variant').length>1)throw new ApiError(400,'照片参数不正确','MEDIA_INPUT');
+  if(source==='r2'&&!KEY.test(url.searchParams.get('key')||''))throw new ApiError(400,'照片编号不正确','MEDIA_INPUT');
+  const delegated=source==='r2'&&process.env.PHOTO_WORKER_READS==='1';
+  const session=await (delegated?photoCredentials:authenticate)(req,res),start=Number(partText)*CHUNK;
+  let {response,meta}=await (delegated?workerPhoto(url,session.access_token,metaOnly,start,res):(source==='legacy'?legacy:r2)(url,session.access_token,metaOnly,start));
+  meta.variant||='original';
   res.setHeader('X-Media-Version',meta.version);res.setHeader('ETag','"'+meta.version+'"');
   if(metaOnly){try{await response?.body?.cancel();}catch{}return res.status(200).json(meta);}
   const body=await measure('photo_body',()=>windowBytes(response,start,meta.size));

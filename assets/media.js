@@ -51,7 +51,7 @@ window.resumePhotoLoads=owner=>{
 };
 function photoDescriptor(img){
  const kind=img.dataset.legacyKind||'daily';
- return img.dataset.mediaKey?{ref:'r2:'+img.dataset.mediaKey,query:'source=r2&key='+encodeURIComponent(img.dataset.mediaKey)}:{ref:'legacy:'+kind+':'+img.dataset.legacyId,query:'source=legacy&kind='+kind+'&id='+encodeURIComponent(img.dataset.legacyId)};
+ return img.dataset.mediaKey?{ref:'r2:'+img.dataset.mediaKey+(img.dataset.photoVariant==='thumbnail'?':thumbnail':''),query:'source=r2&key='+encodeURIComponent(img.dataset.mediaKey)+(img.dataset.photoVariant==='thumbnail'?'&variant=thumbnail':'')}:{ref:'legacy:'+kind+':'+img.dataset.legacyId,query:'source=legacy&kind='+kind+'&id='+encodeURIComponent(img.dataset.legacyId)};
 }
 function photoError(code,message='照片暂时无法加载'){return Object.assign(new Error(message),{code});}
 function retryablePhotoError(error){
@@ -105,7 +105,9 @@ async function readPhoto(job,controller){
  const meta=await photoStep(job,controller,job.query+'&meta=1',async response=>{try{return await response.json();}catch{throw photoError('MEDIA_METADATA');}});
  if(!photoLive(job))throw photoError('MEDIA_ABORTED');
  if(!Number.isInteger(meta.size)||meta.size<=0||meta.size>20*PHOTO_CHUNK||!['image/jpeg','image/png','image/webp'].includes(meta.type)||typeof meta.version!=='string'||!meta.version||meta.version.length>128)throw photoError('MEDIA_METADATA');
- const id=job.owner+'|'+job.ref+'|'+meta.version+'|original';job.meta=meta;
+ // Explicit original fallback reuses the existing original cache namespace.
+ const cacheRef=meta.variant==='original'?job.ref.replace(/:thumbnail$/,''):job.ref;
+ const id=job.owner+'|'+cacheRef+'|'+meta.version+'|original';job.meta=meta;
  const resumable=Boolean(meta.sha256&&/^[a-f0-9]{64}$/.test(meta.sha256))||meta.resumable===true;
  const cached=await photoCache.get(id);
  if(cached&&photoLive(job)&&cached.blob.size===meta.size&&cached.blob.type===meta.type){job.partial=null;return {blob:cached.blob,id};}
@@ -115,7 +117,7 @@ async function readPhoto(job,controller){
  if(!resumable||!job.partial||job.partial.signature!==signature||Date.now()-job.partial.touched>PHOTO_PARTIAL_TTL)job.partial={signature,resumable,parts:[],bytes:0,touched:Date.now()};
  const partial=job.partial;partial.touched=Date.now();
  for(let start=partial.bytes,part=partial.parts.length;start<meta.size;start+=PHOTO_CHUNK,part++){
-  const data=await photoStep(job,controller,job.query+'&part='+part+'&version='+encodeURIComponent(meta.version),async r=>{
+  const data=await photoStep(job,controller,(meta.variant==='original'?job.query.replace('&variant=thumbnail',''):job.query)+'&part='+part+'&version='+encodeURIComponent(meta.version),async r=>{
    const range=r.headers.get('Content-Range')?.match(/^bytes (\d+)-(\d+)\/(\d+)$/);
    if(r.headers.get('X-Media-Version')!==meta.version){try{await r.body?.cancel();}catch{}throw photoError('MEDIA_VERSION_CHANGED','照片已更新，请重试');}
    if(!range||Number(range[1])!==start||Number(range[2])!==Math.min(start+PHOTO_CHUNK-1,meta.size-1)||Number(range[3])!==meta.size){try{await r.body?.cancel();}catch{}throw photoError('MEDIA_RANGE_INVALID');}
@@ -127,7 +129,7 @@ async function readPhoto(job,controller){
  const blob=new Blob(partial.parts,{type:meta.type});
  if(meta.sha256){const bytes=await blob.arrayBuffer();const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');if(hash!==meta.sha256)throw photoError('MEDIA_HASH_MISMATCH');}
  if(!photoLive(job))throw photoError('MEDIA_ABORTED');
- await photoCache.put({id,account:job.owner,ref:job.ref,version:meta.version,mime:meta.type},blob,ticket);
+ await photoCache.put({id,account:job.owner,ref:cacheRef,version:meta.version,mime:meta.type},blob,ticket);
  job.partial=null;
  return {blob,id};
 }
@@ -211,4 +213,16 @@ async function cleanupOrphanPhotos(){
  }
 }
 const clearDailyData=window.clearPrivateData;
-window.clearPrivateData=()=>{mediaRequests.forEach(c=>c.abort());mediaRequests.clear();resetPhotoLoads();cleanedFor=null;clearDailyData?.();};
+window.clearPrivateData=()=>{closeOriginalPhoto();mediaRequests.forEach(c=>c.abort());mediaRequests.clear();resetPhotoLoads();cleanedFor=null;clearDailyData?.();};
+
+let originalPhotoDialog=null;
+function closeOriginalPhoto(){if(!originalPhotoDialog)return;originalPhotoDialog.remove();originalPhotoDialog=null;hydratePrivatePhotos();}
+function openOriginalPhoto(key){
+ if(!currentProfile||photoPaused)return;closeOriginalPhoto();
+ const dialog=document.createElement('dialog');dialog.className='original-photo-dialog';dialog.setAttribute('aria-label','查看原图');
+ const close=document.createElement('button');close.type='button';close.textContent='关闭原图';close.onclick=closeOriginalPhoto;
+ const img=document.createElement('img');img.dataset.mediaKey=key;img.alt='正在加载原图';
+ dialog.append(close,img);document.body.append(dialog);originalPhotoDialog=dialog;
+ dialog.addEventListener('cancel',closeOriginalPhoto);dialog.showModal();hydratePrivatePhotos();
+}
+$('dailyList').addEventListener('click',event=>{const button=event.target.closest('[data-view-photo]');if(button)openOriginalPhoto(button.dataset.viewPhoto);});

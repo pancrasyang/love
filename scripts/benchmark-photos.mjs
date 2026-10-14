@@ -12,9 +12,12 @@ const CHUNK=1048576,R='10000000-0000-4000-8000-000000000001',KEY=`daily/${R}/${A
 const bytes=Buffer.alloc(6*CHUNK,37),sha=createHash('sha256').update(bytes).digest('hex');
 const row={key:KEY,record_id:R,business_type:'daily',owner_id:A,state:'ready',sha256:sha,size_bytes:bytes.length,content_type:'image/jpeg'};
 process.env.SUPABASE_URL='https://benchmark.invalid';process.env.SUPABASE_PUBLISHABLE_KEY='benchmark-public';process.env.LOVE_SESSION_SECRET='benchmark-only-secret-at-least-32-characters';
+const delegated=process.argv.includes('--delegated');
+process.env.PHOTO_WORKER_READS=delegated?'1':'0';
 const oldFetch=globalThis.fetch,info=console.info,warn=console.warn;
 const sourceOption=process.argv.find(arg=>arg.startsWith('--media-source='));
-const mediaSource=sourceOption?readFileSync(sourceOption.slice('--media-source='.length),'utf8'):undefined;
+// This benchmark isolates original-image authorization, not thumbnail encoding.
+const mediaSource=(sourceOption?readFileSync(sourceOption.slice('--media-source='.length),'utf8'):readFileSync('assets/media.js','utf8')).replaceAll("img.dataset.photoVariant==='thumbnail'",'false');
 const recorder=()=>({headers:{},setHeader(k,v){this.headers[k.toLowerCase()]=v;},status(n){this.statusCode=n;return this;},json(value){this.body=value;},send(value){this.body=value;}});
 const issued=recorder();setSession(issued,{access_token:'benchmark-user-token',refresh_token:'benchmark-refresh',expires_in:3600});
 const cookie=issued.headers['set-cookie'].split(';')[0];
@@ -54,7 +57,7 @@ try{
    if(a.w.document.querySelector('.photo-retry')){a.w.document.querySelector('.photo-retry').click();await a.idle();}
    assert.equal(a.w.document.querySelector('[data-media-key]').getAttribute('src'),'blob:test');
    for(const log of logs){const service=log.stages.some(step=>step.stage==='r2_read')?'worker':'vercel';for(const step of log.stages){const key=service+'.'+step.stage;(stages[key]||={calls:0,total_ms:0}).calls++;stages[key].total_ms+=step.elapsed_ms;}}
-   info(JSON.stringify({scenario:outage?'one-failure-at-part-4':'healthy',network:'local synthetic, 5ms per Supabase/R2 operation',...counts,elapsed_ms:Math.round(performance.now()-began),stages}));
+   info(JSON.stringify({delegated,scenario:outage?'one-failure-at-part-4':'healthy',network:'local synthetic, 5ms per Supabase/R2 operation',...counts,elapsed_ms:Math.round(performance.now()-began),stages}));
   }finally{await a.close();}
  }
 }finally{globalThis.fetch=oldFetch;console.info=info;console.warn=warn;}

@@ -152,7 +152,7 @@ test('retained partial downloads stay within 40MiB and evicted photos download a
   await a.run('restoreSession()');a.visible([0,1,2]);await a.idle();
   assert.equal((await a.run('photoCache.stats()')).count,0);
   const retained=a.run('[...photoJobs.values()].reduce((n,job)=>n+(job.partial?.bytes||0),0)');assert(retained<=40*CHUNK);
-  const evicted=a.run('[...photoJobs.values()].find(job=>!job.partial).ref.slice(3)');assert(evicted);
+  const evicted=a.run('[...photoJobs.values()].find(job=>!job.partial).ref.slice(3).replace(/:thumbnail$/, "")');assert(evicted);
   const before=parts.get(evicted).filter(part=>part===0).length;healthy=true;
   const img=[...a.w.document.querySelectorAll('[data-media-key]')].find(img=>img.dataset.mediaKey===evicted);img.nextElementSibling.click();await a.idle();
   assert.equal(parts.get(evicted).filter(part=>part===0).length,before+1);assert.equal(img.getAttribute('src'),'blob:test');
