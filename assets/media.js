@@ -105,7 +105,9 @@ async function readPhoto(job,controller){
  const meta=await photoStep(job,controller,job.query+'&meta=1',async response=>{try{return await response.json();}catch{throw photoError('MEDIA_METADATA');}});
  if(!photoLive(job))throw photoError('MEDIA_ABORTED');
  if(!Number.isInteger(meta.size)||meta.size<=0||meta.size>20*PHOTO_CHUNK||!['image/jpeg','image/png','image/webp'].includes(meta.type)||typeof meta.version!=='string'||!meta.version||meta.version.length>128)throw photoError('MEDIA_METADATA');
- const id=job.owner+'|'+job.ref+'|'+meta.version+'|original';job.meta=meta;
+ // Explicit original fallback reuses the existing original cache namespace.
+ const cacheRef=meta.variant==='original'?job.ref.replace(/:thumbnail$/,''):job.ref;
+ const id=job.owner+'|'+cacheRef+'|'+meta.version+'|original';job.meta=meta;
  const resumable=Boolean(meta.sha256&&/^[a-f0-9]{64}$/.test(meta.sha256))||meta.resumable===true;
  const cached=await photoCache.get(id);
  if(cached&&photoLive(job)&&cached.blob.size===meta.size&&cached.blob.type===meta.type){job.partial=null;return {blob:cached.blob,id};}
@@ -127,7 +129,7 @@ async function readPhoto(job,controller){
  const blob=new Blob(partial.parts,{type:meta.type});
  if(meta.sha256){const bytes=await blob.arrayBuffer();const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');if(hash!==meta.sha256)throw photoError('MEDIA_HASH_MISMATCH');}
  if(!photoLive(job))throw photoError('MEDIA_ABORTED');
- await photoCache.put({id,account:job.owner,ref:job.ref,version:meta.version,mime:meta.type},blob,ticket);
+ await photoCache.put({id,account:job.owner,ref:cacheRef,version:meta.version,mime:meta.type},blob,ticket);
  job.partial=null;
  return {blob,id};
 }

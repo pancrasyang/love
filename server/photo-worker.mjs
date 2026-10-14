@@ -65,6 +65,8 @@ export async function workerPhoto(url,token,metaOnly,start,res){
  }
  if(metaOnly)return {meta:checkedPhotoMeta(await response.json())};
  const range=response.headers.get('Content-Range')?.match(/^bytes \d+-\d+\/(\d+)$/);
- const meta=checkedPhotoMeta({size:Number(range?.[1]),type:response.headers.get('Content-Type'),version:response.headers.get('X-Media-Version'),sha256:response.headers.get('X-Media-Version'),variant:response.headers.get('X-Media-Variant'),source_version:response.headers.get('X-Media-Source-Version')});
- return {response,meta};
+ try{
+  const meta=checkedPhotoMeta({size:Number(range?.[1]),type:response.headers.get('Content-Type'),version:response.headers.get('X-Media-Version'),sha256:response.headers.get('X-Media-Version'),variant:response.headers.get('X-Media-Variant'),source_version:response.headers.get('X-Media-Source-Version')});
+  return {response,meta};
+ }catch(error){await response.body?.cancel();throw error;}
 }

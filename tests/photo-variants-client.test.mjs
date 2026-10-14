@@ -23,5 +23,6 @@ test('an unavailable thumbnail falls back to the explicitly returned original va
  try{
   a.w.fetch=async url=>{if(query(url).has('part')){parts.push(url);assert.equal(query(url).get('variant'),null);}return response(url,original,'original');};
   await a.run('restoreSession()');a.visible([0]);await a.idle();assert.equal(parts.length,2);assert.equal(a.w.document.querySelector('img[data-media-key]').getAttribute('src'),'blob:test');
+  a.w.document.querySelector('[data-view-photo]').click();a.visible([0,1]);await a.idle();assert.equal(parts.length,2);assert.equal((await a.run('photoCache.stats()')).count,1);
  }finally{await a.close();}
 });
