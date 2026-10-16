@@ -40,7 +40,7 @@ test('bounded automatic retries preserve completed segments for a reauthorized m
  try{
   a.w.fetch=async url=>{const part=partOf(url);if(part===null)metadata++;else parts.push(part);return part===1&&!healthy?outage():image(url,bytes);};
   await start(a);assert.deepEqual(parts,[0,1,1,1]);assert.equal((await a.run('photoCache.stats()')).count,0);
-  healthy=true;await retry(a);ready(a);assert.deepEqual(parts,[0,1,1,1,1,2]);assert.equal(metadata,2);
+  healthy=true;await retry(a);ready(a);assert.deepEqual(parts,[0,1,1,1,1,2]);assert.equal(metadata,3); // one failed batch probe plus two individual metadata reads
  }finally{await a.close();}
 });
 
