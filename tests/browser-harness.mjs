@@ -1,4 +1,5 @@
 import {readFileSync} from 'node:fs';
+import {webcrypto} from 'node:crypto';
 import vm from 'node:vm';
 import {JSDOM} from 'jsdom';
 import {IDBFactory} from 'fake-indexeddb';
@@ -11,6 +12,7 @@ export async function app({missingSdk=false,brokenSdk=false,cacheFactory=new IDB
  const observed=new Set(),revoked=[],queries=[];
  if(observer)w.IntersectionObserver=class{constructor(fn){intersection=fn;}observe(img){observed.add(img)}unobserve(img){observed.delete(img)}};
  w.Blob=Blob;w.indexedDB=cacheFactory;w.clearTimeout=clearTimeout;
+ if(!w.crypto.subtle)Object.defineProperty(w.crypto,'subtle',{value:webcrypto.subtle,configurable:true});
  const rows={profiles:[{id:A,role:'pengpeng',display_name:'朋朋'},{id:B,role:'kaikai',display_name:'开开'}],daily_checkins:[],daily_comments:[],mood_records:[],media_objects:[],spot_checkins:[]};
  const waitForSource=async table=>{const delay=sourceDelays[table];if(typeof delay==='number')await new Promise(resolve=>setTimeout(resolve,delay));else if(typeof delay==='function')await delay();else if(delay)await delay;};
  const sb={
@@ -91,7 +93,7 @@ export async function app({missingSdk=false,brokenSdk=false,cacheFactory=new IDB
  return {
   w,dom,rows,queries,run,revoked,
   visible(indices){const images=[...observed];intersection(images.map((target,index)=>({target,isIntersecting:indices.includes(index)})));},
-  async idle(){for(let i=0;i<300;i++){if(run('photoActive===0&&photoQueue.length===0'))return;await new Promise(resolve=>setTimeout(resolve,5));}throw Error('Photo queue did not settle');},
+  async idle(){for(let i=0;i<300;i++){if(run('photoActive===0&&photoQueue.length===0&&photoMetaPending.size===0&&!photoMetaController&&!photoMetaScheduled'))return;await new Promise(resolve=>setTimeout(resolve,5));}throw Error('Photo queue did not settle');},
   reads:()=>reads,sessionChecks:()=>sessionChecks,
   login(id=A){session={access_token:'test',expires_at:Date.now()/1000+3600,user:{id},profile:profile(id)};},
   expire(){session=null;},
