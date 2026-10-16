@@ -870,6 +870,27 @@
       font-size: 13px;
     }
 
+    .comment-load-error,
+    .comment-more,
+    .pagination-actions {
+      margin-top: 10px;
+    }
+
+    .comment-load-error {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: .88rem;
+    }
+
+    .pagination-actions {
+      display: flex;
+      flex: 0 0 auto;
+      justify-content: center;
+    }
+
     .memory {
       display: grid;
       grid-template-columns: 0.85fr 1.15fr;
@@ -1264,7 +1285,11 @@
         <div class="panel glass record-panel">
           <h2 class="section-title">日常记录</h2>
           <div class="meta-row"><span id="photoCacheStatus" class="hint"></span><button id="clearPhotoCache" type="button" class="ghost small-button">清除本机照片缓存</button></div>
+          <div id="dailySourceNotices"></div>
           <div id="dailyList" class="list scroll-list"></div>
+          <div class="pagination-actions">
+            <button type="button" id="loadMoreDaily" class="ghost" hidden>加载更多日常</button>
+          </div>
         </div>
       </div>
     </section>

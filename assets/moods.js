@@ -70,5 +70,6 @@ document.querySelectorAll('.mood-option').forEach(button=>button.addEventListene
 $('moodPopover').addEventListener('click',e=>{if(e.target===$('moodPopover'))closeMoodPopover();});
 $('refreshMoods').addEventListener('click',loadMoods);
 window.loadPrivateData=async()=>{await Promise.all([loadDailyCheckins(),loadMoods()]);};
+window.refreshPrivateData=async()=>{await Promise.all([refreshDailyCheckins(),loadMoods()]);};
 window.clearPrivateData=()=>{moodRecords=[];moodRequest++;$('moodViewBox').replaceChildren();$('moodNoteInput').value='';$('moodTodayText').textContent='';$('moodTodayIcon').textContent='♡';};
-setInterval(()=>{if(currentProfile&&!document.hidden)loadPrivateData();},30000);
+setInterval(()=>{if(currentProfile&&!document.hidden)refreshPrivateData();},30000);
