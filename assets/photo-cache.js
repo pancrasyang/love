@@ -46,7 +46,8 @@ function createLovePhotoCache({factory,name='love-private-photos-v1',limit=200*1
    }
   },
   async remove(id){try{await transaction(async s=>remove(s,id));}catch{}},
-  async prune(account,allowed){try{await transaction(async s=>{for(const row of await request(s.meta.getAll()))if(row.expiresAt<=now()||(row.account===account&&!allowed.has(row.ref)))remove(s,row.id);});}catch{}},
+  // Pagination is not proof of deletion. Only expiry or an explicit server-confirmed ref is pruned here.
+  async prune(account,{removeRefs=[]}={}){try{const refs=new Set(removeRefs);await transaction(async s=>{for(const row of await request(s.meta.getAll()))if(row.expiresAt<=now()||(row.account===account&&refs.has(row.ref)))remove(s,row.id);});}catch{}},
   async trim(target=limit){try{await transaction(async s=>{const rows=await request(s.meta.getAll());let total=rows.reduce((n,r)=>n+r.size,0);rows.sort((a,b)=>a.lastAccess-b.lastAccess);for(const row of rows)if(row.expiresAt<=now()||total>target){remove(s,row.id);total-=row.size;}});}catch{}},
   async clear(){try{return await transaction(async s=>{const value=((await request(s.control.get('generation')))?.value||0)+1;s.meta.clear();s.photos.clear();s.control.put({id:'generation',value});return value;});}catch{return null;}},
   async stats(){try{return await transaction(async s=>{const rows=await request(s.meta.getAll());return {count:rows.length,bytes:rows.reduce((n,r)=>n+r.size,0),available:true};})||{count:0,bytes:0,available:false};}catch{return {count:0,bytes:0,available:false};}}

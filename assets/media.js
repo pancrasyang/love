@@ -21,6 +21,10 @@ async function uploadImage(file,recordId){
 }
 async function removeImage(key){if(key)await mediaFetch('/api/media/'+encodeURIComponent(key),{method:'DELETE'});}
 const photoCache=createLovePhotoCache();
+async function forgetCachedPhoto(key){
+ if(!currentProfile||!key)return;
+ await photoCache.prune(currentProfile.id,{removeRefs:['r2:'+key,'r2:'+key+':thumbnail']});
+}
 const photoJobs=new Map(),photoBindings=new Map();
 const PHOTO_CHUNK=1048576,PHOTO_PARTIAL_LIMIT=40*PHOTO_CHUNK,PHOTO_PARTIAL_TTL=5*60*1000;
 const PHOTO_REQUEST_TIMEOUT=45000,PHOTO_JOB_TIMEOUT=10*60*1000;
@@ -205,11 +209,22 @@ async function cleanupOrphanPhotos(){
  const owner=currentProfile.id,epoch=authEpoch;cleanedFor=owner;
  const {data,error}=await sb.from('media_objects').select('key,record_id,created_at,state').eq('owner_id',owner);
  if(error||!isCurrent(epoch)){cleanedFor=null;return;}
- for(const row of data||[]){
+ const candidates=(data||[]).filter(row=>row.state==='deleting'||Date.now()-new Date(row.created_at).getTime()>=3600000);
+ for(let offset=0;offset<candidates.length;offset+=20){
   if(!isCurrent(epoch))return;
-  if(dailyRecords.some(r=>r.photo_key===row.key))continue;
-  if(row.state!=='deleting'&&Date.now()-new Date(row.created_at).getTime()<3600000)continue;
-  try{await removeImage(row.key);}catch{cleanedFor=null;}
+  const batch=candidates.slice(offset,offset+20),keys=batch.map(row=>row.key);
+  let daily,spots;
+  try{[daily,spots]=await Promise.all([
+   sb.from('daily_checkins').select('photo_key').in('photo_key',keys),
+   sb.from('spot_checkins').select('photo_key').in('photo_key',keys)
+  ]);}catch{cleanedFor=null;return;}
+  if(!isCurrent(epoch))return;
+  if(daily.error||spots.error){cleanedFor=null;return;}
+  const referenced=new Set([...(daily.data||[]),...(spots.data||[])].map(row=>row.photo_key).filter(Boolean));
+  for(const row of batch){
+   if(!isCurrent(epoch))return;if(referenced.has(row.key))continue;
+   try{await removeImage(row.key);await forgetCachedPhoto(row.key);}catch{cleanedFor=null;}
+  }
  }
 }
 const clearDailyData=window.clearPrivateData;
