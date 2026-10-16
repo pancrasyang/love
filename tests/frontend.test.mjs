@@ -45,8 +45,8 @@ test('photo version replacement and record deletion invalidate persistent cache'
 test('the preserved historical spot photo has a read-only card',async()=>{const a=await app();try{a.login();a.rows.spot_checkins.push({id:A,spot_name:'old location',spot_date:'2026-01-01',created_at:'2026-01-01T00:00:00Z',photo_path:'old.jpg'});a.w.fetch=async url=>servePhoto(url);await a.run('restoreSession()');assert.match(a.w.document.getElementById('dailyList').textContent,/历史地点/);assert.equal(a.w.document.querySelector('[data-legacy-kind]').dataset.legacyKind,'spot');assert.equal(a.w.document.querySelector('[data-action]'),null)}finally{a.close()}});
 test('failed photos keep retry controls through rerender and recover with unchanged records',async()=>{const a=await app();try{a.login();addPhotos(a,1);let healthy=false;a.w.fetch=async url=>url.includes('meta=1')||healthy?servePhoto(url):{ok:false,status:503,json:async()=>({error:'temporary outage',code:'MEDIA_SOURCE_UNAVAILABLE'})};await a.run('restoreSession()');assert(a.w.document.querySelector('.photo-retry'));a.rows.daily_checkins[0]={...a.rows.daily_checkins[0],content:'edit while unavailable'};await a.run('loadDailyCheckins()');assert(a.w.document.querySelector('.photo-retry'));healthy=true;await a.run('loadDailyCheckins()');assert.equal(a.w.document.querySelector('[data-media-key]').src,'blob:test');assert.equal(a.w.document.querySelector('.photo-retry'),null)}finally{a.close()}});
 
-test('a failed record source leaves the other source and its photos usable, including after focus restoration',async()=>{
- for(const table of ['spot_checkins','daily_checkins']){
+test('a failed record source leaves the other sources and their photos usable, including after focus restoration',async()=>{
+ for(const table of ['spot_checkins','daily_checkins','daily_comments']){
   const sourceErrors={},a=await app({sourceErrors});
   try{
    a.login();addPhotos(a,1);a.rows.spot_checkins.push({id:'spot',spot_name:'old place',created_at:'2026-01-01',photo_path:'old.jpg'});a.w.fetch=async url=>servePhoto(url);
@@ -54,9 +54,9 @@ test('a failed record source leaves the other source and its photos usable, incl
    sourceErrors[table]={message:'temporary outage',code:'UPSTREAM_NETWORK'};
    await a.run('restoreSession()');
    assert.equal(a.run('photoPaused'),false);assert(!a.w.document.getElementById('privateApp').hidden);
-   assert.equal(a.w.document.querySelectorAll('.check-card').length,1);
+   assert.equal(a.w.document.querySelectorAll('.check-card').length,table==='daily_comments'?2:1);
    assert.equal(a.w.document.querySelector('.check-card img').src,'blob:test');
-   assert.match(a.w.document.querySelector('.record-source-error').textContent,table==='spot_checkins'?/历史地点/:/日常记录/);
+   assert.match(a.w.document.querySelector('.record-source-error').textContent,table==='spot_checkins'?/历史地点/:table==='daily_checkins'?/日常记录/:/评论/);
    delete sourceErrors[table];await a.run('loadDailyCheckins()');
    assert.equal(a.w.document.querySelectorAll('.check-card').length,2);assert.equal(a.w.document.querySelector('.record-source-error'),null);
   }finally{await a.close()}
