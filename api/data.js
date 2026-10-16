@@ -1,6 +1,6 @@
 import {withDiagnostics} from '../server/diagnostics.mjs';
 import {privateResponse,csrf,authenticate,upstream,ApiError,failure} from '../server/session.mjs';
-const methods={profiles:['GET','HEAD'],daily_checkins:['GET','HEAD','POST','PATCH','DELETE'],mood_records:['GET','HEAD','POST','PATCH','DELETE'],media_objects:['GET','HEAD'],spot_checkins:['GET','HEAD']};
+const methods={profiles:['GET','HEAD'],daily_checkins:['GET','HEAD','POST','PATCH','DELETE'],daily_comments:['GET','HEAD','POST'],mood_records:['GET','HEAD','POST','PATCH','DELETE'],media_objects:['GET','HEAD'],spot_checkins:['GET','HEAD']};
 export default function handler(req,res){return withDiagnostics(res,async()=>{privateResponse(res);try{
  if(req.headers['sec-fetch-site']==='cross-site')throw new ApiError(403,'请求来源验证失败','CSRF_REJECTED');
  const url=new URL(req.url,'https://local.invalid'),resource=url.searchParams.get('resource');if(url.searchParams.getAll('resource').length!==1||!methods[resource]?.includes(req.method))throw new ApiError(405,'此数据操作不支持','DATA_ROUTE');
