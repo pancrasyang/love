@@ -53,6 +53,11 @@ async function ensureThumbnail(key,token,original,res){
   return checkedPhotoMeta(await result.response.json());
  })();flights.set(id,flight);try{return await flight;}finally{flights.delete(id);}
 }
+export async function prepareWorkerThumbnail(key,token,res){
+ const {response,missing}=await request(key,token,'variant=thumbnail&meta=1',res);
+ if(response)return {meta:checkedPhotoMeta(await response.json()),generated:false};
+ return {meta:await ensureThumbnail(key,token,missing,res),generated:true};
+}
 export async function workerPhoto(url,token,metaOnly,start,res){
  const key=url.searchParams.get('key'),variant=url.searchParams.get('variant')||'original',version=url.searchParams.get('version');
  const query='variant='+variant+(metaOnly?'&meta=1':'')+(version?'&version='+version:'');

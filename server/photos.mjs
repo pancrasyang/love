@@ -87,15 +87,18 @@ export function photoHandler(req,res){return withDiagnostics(res,async()=>{
   if(req.headers['sec-fetch-site']==='cross-site')throw new ApiError(403,'请求来源验证失败','CSRF_REJECTED');
   const url=new URL(req.url,'https://local.invalid'),source=url.searchParams.get('source'),partText=url.searchParams.get('part')||'0',metaOnly=url.searchParams.get('meta')==='1';
   const version=url.searchParams.get('version');
-  if(!['legacy','r2'].includes(source)||!/^\d+$/.test(partText)||Number(partText)>=20||url.searchParams.getAll('version').length>1||(version!==null&&!/^[a-f0-9]{64}$/.test(version)))throw new ApiError(400,'照片参数不正确','MEDIA_INPUT');
+  const compact=url.searchParams.get('compact')==='1';
+  if(!['legacy','r2'].includes(source)||!/^\d+$/.test(partText)||Number(partText)>=20||url.searchParams.getAll('version').length>1||(version!==null&&!/^[a-f0-9]{64}$/.test(version))||url.searchParams.getAll('compact').length>1)throw new ApiError(400,'照片参数不正确','MEDIA_INPUT');
   const variant=url.searchParams.get('variant')||'original';
   if(!['original','thumbnail'].includes(variant)||url.searchParams.getAll('variant').length>1)throw new ApiError(400,'照片参数不正确','MEDIA_INPUT');
+  if(compact&&(source!=='r2'||variant!=='thumbnail'||metaOnly||version!==null||partText!=='0'))throw new ApiError(400,'照片参数不正确','MEDIA_INPUT');
   if(source==='r2'&&!KEY.test(url.searchParams.get('key')||''))throw new ApiError(400,'照片编号不正确','MEDIA_INPUT');
   const delegated=source==='r2'&&process.env.PHOTO_WORKER_READS==='1';
   const session=await (delegated?photoCredentials:authenticate)(req,res),start=Number(partText)*CHUNK;
   let {response,meta}=await (delegated?workerPhoto(url,session.access_token,metaOnly,start,res):(source==='legacy'?legacy:r2)(url,session.access_token,metaOnly,start));
   meta.variant||='original';
   res.setHeader('X-Media-Version',meta.version);res.setHeader('ETag','"'+meta.version+'"');
+  if(meta.sha256)res.setHeader('X-Media-Sha256',meta.sha256);if(meta.variant)res.setHeader('X-Media-Variant',meta.variant);if(meta.source_version)res.setHeader('X-Media-Source-Version',meta.source_version);
   if(metaOnly){try{await response?.body?.cancel();}catch{}return res.status(200).json(meta);}
   const body=await measure('photo_body',()=>windowBytes(response,start,meta.size));
   res.setHeader('Content-Type',meta.type);res.setHeader('Content-Range',`bytes ${start}-${start+body.length-1}/${meta.size}`);res.setHeader('Accept-Ranges','bytes');return res.status(206).send(body);

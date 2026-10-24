@@ -20,6 +20,18 @@ async function uploadImage(file,recordId){
  return mediaFetch('/api/media',{method:'POST',headers:{'Content-Type':file.type,'X-Record-Id':recordId},body:file});
 }
 async function removeImage(key){if(key)await mediaFetch('/api/media/'+encodeURIComponent(key),{method:'DELETE'});}
+async function prepareThumbnail(key,epoch=authEpoch){
+ if(!key||!isCurrent(epoch))throw Error('请重新登录');const controller=new AbortController();mediaRequests.add(controller);
+ try{
+  let response;try{response=await fetch('/api/photo-thumbnail',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-Love-Request':'1'},body:JSON.stringify({key}),signal:controller.signal});}catch{throw Error('缩略图生成连接失败');}
+  const body=await response.json().catch(()=>({}));if(!isCurrent(epoch))throw Error('登录状态已改变');
+  if(!response.ok){if(response.status===401&&isSessionFailure(body)){clearPrivateView();showRoleChoices();$('authMessage').textContent='登录已失效，请重新登录。';}throw Object.assign(Error(body.error||'缩略图生成失败'),{code:body.code,status:response.status});}
+  if(body.status!=='ready'||!/^[a-f0-9]{64}$/.test(body.version||'')||!/^[a-f0-9]{64}$/.test(body.source_version||''))throw Error('缩略图响应异常');return body;
+ }finally{mediaRequests.delete(controller);}
+}
+function refreshThumbnailPhoto(key){
+ const job=photoJobs.get('r2:'+key+':thumbnail');if(!job||!photoLive(job))return;if(job.state==='loading'){job.refreshAfterLoad=true;return;}job.state='idle';job.meta=null;job.metaState='idle';job.batchFallback=false;job.compactFallback=false;job.thumbnailFallback=false;job.error=null;queuePhoto(job);pumpPhotos();
+}
 const photoCache=createLovePhotoCache();
 async function forgetCachedPhoto(key){
  if(!currentProfile||!key)return;
@@ -53,7 +65,7 @@ function resetPhotoLoads(){
 window.pausePhotoLoads=()=>{photoPaused=true;photoMetaSerial++;photoMetaPending.clear();photoMetaScheduled=false;photoMetaController?.abort();};
 window.resumePhotoLoads=owner=>{
  if(photoOwner!==owner){resetPhotoLoads();photoOwner=owner;resetPhotoMetrics();}
- else if(photoPaused)photoJobs.forEach(job=>{if(['ready','error','aborted'].includes(job.state))job.state='idle';if(job.state!=='loading'){job.meta=null;job.metaState='idle';job.batchFallback=false;}});
+ else if(photoPaused)photoJobs.forEach(job=>{if(['ready','error','aborted'].includes(job.state))job.state='idle';if(job.state!=='loading'){job.meta=null;job.metaState='idle';job.batchFallback=false;job.compactFallback=false;job.thumbnailFallback=false;}});
  photoPaused=false;photoJobs.forEach(job=>{if(job.state==='ready')showPhoto(job);else queuePhoto(job);});pumpPhotos();
 };
 function photoDescriptor(img){
@@ -131,23 +143,36 @@ async function flushPhotoMeta(){
    if(serial!==photoMetaSerial||!photoLive(job))continue;
    const result=byPair.get(job.key+'\0'+job.variant);
    if(result?.status==='available'){
-    const meta=checkedClientMeta(result);if(meta.variant!==job.variant)throw photoError('MEDIA_METADATA');job.meta=meta;job.metaState='ready';job.batchFallback=false;queuePhoto(job);
+    const meta=checkedClientMeta(result);if(meta.variant!==job.variant)throw photoError('MEDIA_METADATA');job.meta=meta;job.metaState='ready';job.batchFallback=false;job.compactFallback=false;queuePhoto(job);
    }else if(result?.status==='unavailable'){
     job.metaState='error';job.state='error';dropPhotoUrl(job);for(const img of job.images)img.removeAttribute('src');await photoCache.prune(job.owner,{removeRefs:[job.ref,job.ref.replace(/:thumbnail$/,'')]});showPhotoFailure(job,photoError('MEDIA_NOT_FOUND','照片不存在或已无权访问'));
    }else if(result?.status==='pending'||result?.status==='error'){
-    job.metaState='idle';job.batchFallback=true;queuePhoto(job);
+    job.metaState='idle';job.batchFallback=true;job.compactFallback=result.status==='error'&&result.code==='MEDIA_SOURCE_UNAVAILABLE'&&job.variant==='thumbnail';queuePhoto(job);
    }else throw photoError('MEDIA_METADATA');
   }
  }catch(error){
-  for(const job of jobs)if(serial===photoMetaSerial&&photoLive(job)&&job.metaState==='loading'){job.metaState='idle';job.batchFallback=true;queuePhoto(job);}
+  for(const job of jobs)if(serial===photoMetaSerial&&photoLive(job)&&job.metaState==='loading'){job.metaState='idle';job.batchFallback=true;job.compactFallback=job.variant==='thumbnail'&&['MEDIA_SOURCE_UNAVAILABLE','MEDIA_HTTP_503'].includes(error.code);queuePhoto(job);}
  }finally{
   mediaRequests.delete(controller);if(photoMetaController===controller)photoMetaController=null;
   if(photoMetaPending.size&&!photoPaused&&!photoMetaScheduled){photoMetaScheduled=true;Promise.resolve().then(flushPhotoMeta);}pumpPhotos();settlePhotoWaiters();
  }
 }
+async function readCompactThumbnail(job,controller,ticket){
+ return photoStep(job,controller,job.query+'&part=0&compact=1',async response=>{
+  const range=response.headers.get('Content-Range')?.match(/^bytes (\d+)-(\d+)\/(\d+)$/),version=response.headers.get('X-Media-Version'),sourceVersion=response.headers.get('X-Media-Source-Version'),sha256=response.headers.get('X-Media-Sha256'),type=(response.headers.get('Content-Type')||'').split(';')[0].trim().toLowerCase();
+  const meta=checkedClientMeta({size:Number(range?.[3]),type,version,sha256,variant:response.headers.get('X-Media-Variant'),source_version:sourceVersion});
+  if(meta.variant!=='thumbnail'||meta.size>512*1024||meta.version!==meta.sha256||Number(range?.[1])!==0||Number(range?.[2])!==meta.size-1)throw photoError('MEDIA_METADATA');
+  let bytes;try{bytes=await response.arrayBuffer();}catch{throw photoError('MEDIA_TRUNCATED','照片传输中断，请重试');}photoLoadMetrics.bodyBytes+=bytes.byteLength;
+  if(bytes.byteLength!==meta.size)throw photoError('MEDIA_TRUNCATED');const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');if(hash!==meta.sha256)throw photoError('MEDIA_HASH_MISMATCH');
+  const blob=new Blob([bytes],{type:meta.type}),id=job.owner+'|'+job.ref+'|'+meta.version+'|original';if(!photoLive(job))throw photoError('MEDIA_ABORTED');if(!await photoCache.put({id,account:job.owner,ref:job.ref,version:meta.version,mime:meta.type},blob,ticket))photoLoadMetrics.cacheWriteFailures++;job.meta=meta;job.partial=null;return {blob,id};
+ },{retry:true});
+}
 async function readPhoto(job,controller){
  const ticket=await photoCache.ticket();
- const meta=checkedClientMeta(job.meta||await photoStep(job,controller,job.query+'&meta=1',async response=>{try{return await response.json();}catch{throw photoError('MEDIA_METADATA');}}));job.meta=meta;
+ if(!job.meta&&job.compactFallback&&job.variant==='thumbnail'){
+  photoLoadMetrics.cacheMisses++;try{return await readCompactThumbnail(job,controller,ticket);}catch(error){if(!['MEDIA_VERSION_CHANGED','MEDIA_VARIANT_NOT_FOUND','MEDIA_NOT_FOUND'].includes(error.code))throw error;job.compactFallback=false;photoLoadMetrics.cacheMisses--;}
+ }
+ const meta=checkedClientMeta(job.meta||await photoStep(job,controller,job.query+'&meta=1',async response=>{try{return await response.json();}catch{throw photoError('MEDIA_METADATA');}}));job.meta=meta;job.thumbnailFallback=job.variant==='thumbnail'&&meta.variant==='original';
  if(!photoLive(job))throw photoError('MEDIA_ABORTED');
  // Explicit original fallback reuses the existing original cache namespace.
  const cacheRef=meta.variant==='original'?job.ref.replace(/:thumbnail$/,''):job.ref;
@@ -180,13 +205,14 @@ async function readPhoto(job,controller){
 function showPhoto(job){
  if(photoPaused||!photoLive(job)||!job.blob)return;
  if(!job.url){job.url=URL.createObjectURL(job.blob);mediaUrls.add(job.url);}
- for(const img of job.images){if(!img.isConnected||!img._photoVisible)continue;img.src=job.url;img.alt='日常照片';img.dataset.photoState='ready';img.nextElementSibling?.classList.contains('photo-retry')&&img.nextElementSibling.remove();if(photoLoadMetrics.firstPhotoMs===null)photoLoadMetrics.firstPhotoMs=Date.now()-photoLoadMetrics.startedAt;}
+ for(const img of job.images){if(!img.isConnected||!img._photoVisible)continue;img.src=job.url;img.alt=job.thumbnailFallback?'日常照片（缩略图暂不可用，已显示原图）':'日常照片';img.dataset.photoState='ready';img.nextElementSibling?.classList.contains('photo-retry')&&img.nextElementSibling.remove();
+  let note=img.nextElementSibling?.classList.contains('thumbnail-fallback')?img.nextElementSibling:null;if(!job.thumbnailFallback){note?.remove();}else if(!note){note=document.createElement('button');note.type='button';note.className='ghost small-button thumbnail-fallback';note.textContent='已回退原图 · 重试缩略图';note.onclick=()=>{note.remove();job.state='idle';job.meta=null;job.metaState='idle';job.batchFallback=false;job.compactFallback=false;job.thumbnailFallback=false;queuePhoto(job);pumpPhotos();};img.after(note);}if(photoLoadMetrics.firstPhotoMs===null)photoLoadMetrics.firstPhotoMs=Date.now()-photoLoadMetrics.startedAt;}
 }
 function showPhotoFailure(job,error){
  for(const img of job.images){if(!img.isConnected)continue;img.dataset.photoState='error';img.alt=(error.message||'照片暂时无法加载')+'（'+(error.code||'MEDIA_UNKNOWN')+'）';
   if(img.nextElementSibling?.classList.contains('photo-retry'))continue;
   const button=document.createElement('button');button.type='button';button.className='ghost small-button photo-retry';button.textContent='重试照片';
-  button.onclick=()=>{if(['loading','queued'].includes(job.state))return;button.remove();job.state='idle';job.meta=null;queuePhoto(job);pumpPhotos();};img.after(button);
+  button.onclick=()=>{if(['loading','queued'].includes(job.state))return;button.remove();job.state='idle';job.meta=null;job.metaState='idle';job.compactFallback=false;queuePhoto(job);pumpPhotos();};img.after(button);
  }
 }
 function queuePhoto(job){
@@ -210,7 +236,7 @@ function pumpPhotos(){
    if(controller.signal.aborted){job.state='aborted';if(!job.partial?.resumable)job.partial=null;if(!photoPaused)showPhotoFailure(job,photoError('MEDIA_TIMEOUT','照片加载超时，请重试'));}
    else{job.state='error';job.error=error;if(!retryablePhotoError(error)||!job.partial?.resumable)job.partial=null;showPhotoFailure(job,error);}
    trimPhotoPartials();
-  }).finally(()=>{clearTimeout(timer);mediaRequests.delete(controller);photoActive--;pumpPhotos();settlePhotoWaiters();updatePhotoCacheStatus();});
+  }).finally(()=>{clearTimeout(timer);mediaRequests.delete(controller);photoActive--;if(photoLive(job)&&job.refreshAfterLoad){job.refreshAfterLoad=false;job.state='idle';job.meta=null;job.metaState='idle';job.batchFallback=false;job.compactFallback=false;job.thumbnailFallback=false;job.error=null;queuePhoto(job);}pumpPhotos();settlePhotoWaiters();updatePhotoCacheStatus();});
  }
  settlePhotoWaiters();
 }
@@ -225,19 +251,19 @@ async function hydratePrivatePhotos({recoverFailures=false}={}){
  for(const img of document.querySelectorAll('img[data-media-key],img[data-legacy-id]')){
   if(photoBindings.has(img))continue;
   const descriptor=photoDescriptor(img);let job=photoJobs.get(descriptor.ref);
-  if(!job){job={...descriptor,owner:photoOwner,serial:photoSerial,state:'idle',metaState:'idle',batchFallback:false,images:new Set()};photoJobs.set(job.ref,job);}
+  if(!job){job={...descriptor,owner:photoOwner,serial:photoSerial,state:'idle',metaState:'idle',batchFallback:false,compactFallback:false,thumbnailFallback:false,images:new Set()};photoJobs.set(job.ref,job);}
   job.images.add(img);photoBindings.set(img,job);
   img.onerror=()=>{if(!photoLive(job))return;photoCache.remove(job.cacheId);dropPhotoUrl(job);job.state='error';showPhotoFailure(job,photoError('MEDIA_DECODE','照片解码失败，请重试'));};
   photoObserver?.observe(img);
  }
- for(const job of photoJobs.values()){if(job.state==='error'){if(recoverFailures){job.state='idle';job.meta=null;}else showPhotoFailure(job,job.error||photoError('MEDIA_UNKNOWN'));}queuePhoto(job);}
+ for(const job of photoJobs.values()){if(job.state==='error'){if(recoverFailures){job.state='idle';job.meta=null;job.metaState='idle';job.batchFallback=false;job.compactFallback=false;}else showPhotoFailure(job,job.error||photoError('MEDIA_UNKNOWN'));}queuePhoto(job);}
  updateFallbackVisibility();pumpPhotos();
  if(!photoObserver&&(photoActive||photoQueue.length||photoMetaPending.size||photoMetaController||photoMetaScheduled))await new Promise(resolve=>photoWaiters.push(resolve));
 }
 async function updatePhotoCacheStatus(){if(!currentProfile)return;const stats=await photoCache.stats();if(currentProfile&&window.document&&$('photoCacheStatus'))$('photoCacheStatus').textContent=stats.available?'本机照片缓存 '+(stats.bytes/1048576).toFixed(1)+'MB / 200MB':'照片缓存暂不可用，使用按需读取';}
 async function clearLocalPhotoCache(broadcast=true){
  const owner=currentProfile?.id;resetPhotoLoads();await photoCache.clear();
- document.querySelectorAll('img[data-media-key],img[data-legacy-id]').forEach(img=>{img.removeAttribute('src');img.nextElementSibling?.classList.contains('photo-retry')&&img.nextElementSibling.remove();});
+ document.querySelectorAll('img[data-media-key],img[data-legacy-id]').forEach(img=>{img.removeAttribute('src');if(img.nextElementSibling?.matches('.photo-retry,.thumbnail-fallback'))img.nextElementSibling.remove();});
  if(broadcast){try{localStorage.setItem('love-photo-cache-clear',Date.now()+':'+Math.random());}catch{}}
  if(owner&&currentProfile?.id===owner){window.resumePhotoLoads(owner);await hydratePrivatePhotos();await updatePhotoCacheStatus();}
 }

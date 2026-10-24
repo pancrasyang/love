@@ -118,6 +118,11 @@ async function handle(request,env,trace){
     if(variant!=='thumbnail'||url.searchParams.get('version')!==row.sha256)throw new HttpError(412,'照片版本已改变','MEDIA_VERSION_CHANGED');
     const secret=env.LOVE_PHOTO_PROXY_SECRET;
     if(typeof secret!=='string'||secret.length<32)throw new HttpError(503,'缩略图服务尚未配置','MEDIA_THUMBNAIL_CONFIG');
+    const existing=await measure('r2_thumbnail_read',()=>env.LOVE_MEDIA.head?env.LOVE_MEDIA.head(derivedKey):env.LOVE_MEDIA.get(derivedKey));
+    if(existing){
+     const hash=existing.customMetadata?.sha256,valid=existing.customMetadata?.sourceVersion===row.sha256&&/^[a-f0-9]{64}$/.test(hash||'')&&Number.isInteger(existing.size)&&existing.size>0&&existing.size<=512*1024&&existing.httpMetadata?.contentType==='image/webp';
+     await existing.body?.cancel?.();if(!valid)throw new HttpError(503,'缩略图登记异常','MEDIA_METADATA');await request.body?.cancel?.();return json({size:existing.size,type:'image/webp',version:hash,sha256:hash,variant:'thumbnail',source_version:row.sha256});
+    }
     const bytes=await limitedBody(request,512*1024),stamp=request.headers.get('X-Photo-Timestamp'),proof=request.headers.get('X-Photo-Proof');
     if(!/^\d{13}$/.test(stamp||'')||Math.abs(Date.now()-Number(stamp))>60000||!/^[a-f0-9]{64}$/.test(proof||''))throw new HttpError(403,'缩略图写入验证失败','MEDIA_THUMBNAIL_PROOF');
     const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -127,7 +132,7 @@ async function handle(request,env,trace){
     if(!await crypto.subtle.verify('HMAC',signingKey,signature,new TextEncoder().encode(material)))throw new HttpError(403,'缩略图写入验证失败','MEDIA_THUMBNAIL_PROOF');
     let image;try{image=inspectImage(bytes,'image/webp');}catch{throw new HttpError(415,'缩略图格式异常','MEDIA_FORMAT');}
     if(image.byteLength!==bytes.length)throw new HttpError(415,'缩略图内容异常','MEDIA_FORMAT');
-    await measure('r2_thumbnail_write',()=>env.LOVE_MEDIA.put(derivedKey,bytes,{httpMetadata:{contentType:'image/webp'},customMetadata:{sourceVersion:row.sha256,sha256:hash}}));
+    try{await measure('r2_thumbnail_write',()=>env.LOVE_MEDIA.put(derivedKey,bytes,{httpMetadata:{contentType:'image/webp'},customMetadata:{sourceVersion:row.sha256,sha256:hash}}));}catch(error){if(error instanceof HttpError)throw error;throw new HttpError(503,'缩略图写入失败，请稍后重试','MEDIA_SOURCE_UNAVAILABLE');}
     return json({size:bytes.length,type:'image/webp',version:hash,sha256:hash,variant:'thumbnail',source_version:row.sha256},201);
    }
    let meta=original,object;

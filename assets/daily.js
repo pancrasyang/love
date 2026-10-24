@@ -213,11 +213,19 @@ function resetDailyForm(){
  editingDailyId=null;$('dailyForm').reset();$('dailyPhoto').disabled=false;$('dailySubmitBtn').textContent='在线发布日常打卡';
  $('dailyPreview').removeAttribute('src');$('dailyPreview').classList.remove('show');setStatus('dailyStatus','');syncRightRecordPanelsOnly();
 }
+async function finishPublishedThumbnail(key,epoch){
+ const status=$('dailyStatus');setStatus('dailyStatus','日常已保存，正在生成缩略图…');
+ try{await prepareThumbnail(key,epoch);if(!isCurrent(epoch))return;refreshThumbnailPhoto(key);setStatus('dailyStatus','保存成功，缩略图已就绪。');}
+ catch(error){
+  if(!isCurrent(epoch))return;setStatus('dailyStatus','日常已保存；缩略图暂未生成，可重试或直接查看原图。');
+  const button=document.createElement('button');button.type='button';button.className='ghost small-button thumbnail-generate-retry';button.textContent='重试生成缩略图';button.onclick=async()=>{button.disabled=true;button.textContent='正在重试…';await finishPublishedThumbnail(key,authEpoch);};status.append(button);
+ }
+}
 $('dailyForm').addEventListener('submit',async event=>{
  event.preventDefault();if(!currentProfile||dailyBusy)return;
  const text=$('dailyText').value.trim(),file=$('dailyPhoto').files[0];if(!text)return;
  dailyBusy=true;$('dailySubmitBtn').disabled=true;const epoch=authEpoch,id=editingDailyId;
- setStatus('dailyStatus',id?'正在保存修改…':'正在保存日常…');let uploadedKey=null;
+ setStatus('dailyStatus',id?'正在保存修改…':'正在保存日常…');let uploadedKey=null,linked=false;
  try{
   let result;
   if(id)result=await sb.from('daily_checkins').update({content:text}).eq('id',id).select('id');
@@ -227,8 +235,8 @@ $('dailyForm').addEventListener('submit',async event=>{
    result=await sb.from('daily_checkins').insert({id:recordId,content:text,photo_key:photo.key,photo_url:'',photo_path:''}).select('id');
   }
   if(result.error||!result.data?.length)throw result.error||Error('记录未保存');
-  if(!isCurrent(epoch))return;resetDailyForm();await loadDailyCheckins();setStatus('dailyStatus','保存成功。');throwHearts();
- }catch(error){if(isCurrent(epoch)){if(uploadedKey){try{await removeImage(uploadedKey);}catch{/* The server refuses deletion if an ambiguous save attached the photo. */}}setStatus('dailyStatus',error.message||'保存失败，请检查网络后重试。');}}
+  linked=true;if(!isCurrent(epoch))return;resetDailyForm();if(uploadedKey)await finishPublishedThumbnail(uploadedKey,epoch);await loadDailyCheckins();if(!uploadedKey)setStatus('dailyStatus','保存成功。');throwHearts();
+ }catch(error){if(isCurrent(epoch)){if(uploadedKey&&!linked){try{await removeImage(uploadedKey);}catch{/* The server refuses deletion if an ambiguous save attached the photo. */}}setStatus('dailyStatus',linked?'日常已保存，页面刷新暂时失败。':error.message||'保存失败，请检查网络后重试。');}}
  finally{dailyBusy=false;$('dailySubmitBtn').disabled=false;}
 });
 async function deleteDailyCheckin(id){
