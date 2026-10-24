@@ -193,3 +193,5 @@ Vercel 接口返回 `X-Love-Request-Id`，照片接口另外保留 `X-Photo-Requ
 Worker 配置启用结构化日志，关闭自动请求调用日志，避免自动采集含照片路径的请求 URL。通过 Dashboard 粘贴 Worker 的部署方式还需在该服务设置中启用日志、关闭 Invocation logs；仓库配置仅在对应配置部署生效后应用。更新 Worker 源码后运行 `node scripts/build-worker.mjs` 同步 Dashboard 文件，再运行 `npm test`、`npm run check` 和 `node scripts/build.mjs`。本地验证不代表 Vercel、Worker 已发布或真实设备已验收；历史迁移和旧桶隐私收口仍单独进行。
 
 照片分段现支持有上限的自动重试，以及同账号、同版本的已完成分段复用；版本变化、权限拒绝或完整性错误会丢弃未完成数据。历史来源缺少强 ETag 时保守地重新读取整图。未完成分段仅留在页面内存，超过 5 分钟不再复用，保留量上限 40MiB；每次恢复仍重新鉴权。运行 `node scripts/benchmark-photos.mjs` 可复现本地合成基准，详见[恢复边界与测量结果](docs/photo-transfer-performance.md)。鉴权请求合并、生产设备验收、历史迁移和旧桶隐私收口仍分别进行。
+
+列表分页、批量私有元数据、发布后缩略图生成和后续地域/并发/RLS 对照方法见[照片加载 V3 测量与验收计划](docs/photo-loading-v3-plan.md)。该计划中的预览、生产和真机项目在实际执行前均不得标记为通过。
