@@ -218,7 +218,7 @@ async function finishPublishedThumbnail(key,epoch){
  try{await prepareThumbnail(key,epoch);if(!isCurrent(epoch))return;refreshThumbnailPhoto(key);setStatus('dailyStatus','保存成功，缩略图已就绪。');}
  catch(error){
   if(!isCurrent(epoch))return;setStatus('dailyStatus','日常已保存；缩略图暂未生成，可重试或直接查看原图。');
-  const button=document.createElement('button');button.type='button';button.className='ghost small-button thumbnail-generate-retry';button.textContent='重试生成缩略图';button.onclick=async()=>{button.disabled=true;button.textContent='正在重试…';await finishPublishedThumbnail(key,authEpoch);};status.append(button);
+  const button=document.createElement('button');button.type='button';button.className='ghost small-button thumbnail-generate-retry';button.textContent='重试生成缩略图';button.onclick=async()=>{if(!isCurrent(epoch))return;button.disabled=true;button.textContent='正在重试…';await finishPublishedThumbnail(key,epoch);};status.append(button);
  }
 }
 $('dailyForm').addEventListener('submit',async event=>{
@@ -235,7 +235,7 @@ $('dailyForm').addEventListener('submit',async event=>{
    result=await sb.from('daily_checkins').insert({id:recordId,content:text,photo_key:photo.key,photo_url:'',photo_path:''}).select('id');
   }
   if(result.error||!result.data?.length)throw result.error||Error('记录未保存');
-  linked=true;if(!isCurrent(epoch))return;resetDailyForm();if(uploadedKey)await finishPublishedThumbnail(uploadedKey,epoch);await loadDailyCheckins();if(!uploadedKey)setStatus('dailyStatus','保存成功。');throwHearts();
+  linked=true;if(!isCurrent(epoch))return;resetDailyForm();const preparation=uploadedKey?finishPublishedThumbnail(uploadedKey,epoch):Promise.resolve();await Promise.all([loadDailyCheckins(),preparation]);if(!uploadedKey)setStatus('dailyStatus','保存成功。');throwHearts();
  }catch(error){if(isCurrent(epoch)){if(uploadedKey&&!linked){try{await removeImage(uploadedKey);}catch{/* The server refuses deletion if an ambiguous save attached the photo. */}}setStatus('dailyStatus',linked?'日常已保存，页面刷新暂时失败。':error.message||'保存失败，请检查网络后重试。');}}
  finally{dailyBusy=false;$('dailySubmitBtn').disabled=false;}
 });

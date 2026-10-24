@@ -19,7 +19,7 @@ function harness(bytes){
  const env={SUPABASE_URL:process.env.SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY:'public',ALLOWED_ORIGINS:'https://love.invalid',LOVE_PHOTO_PROXY_SECRET:'synthetic-thumbnail-secret-at-least-32',LOVE_MEDIA:{
   async head(k){const o=objects.get(k);return o&&{size:o.bytes.length,httpMetadata:o.httpMetadata,customMetadata:o.customMetadata};},
   async get(k,{range}={}){counts.reads++;const o=objects.get(k);return o&&{size:o.bytes.length,httpMetadata:o.httpMetadata,customMetadata:o.customMetadata,body:new Response(range?o.bytes.subarray(range.offset,range.offset+range.length):o.bytes).body};},
-  async put(k,b,m){counts.writes++;if(writeFailure){writeFailure=false;throw Error('temporary R2 failure');}objects.set(k,{bytes:Buffer.from(b),...m});},async delete(){throw Error('Original deletion is forbidden in these tests');}
+  async put(k,b,m){if(m.onlyIf?.get('If-None-Match')==='*'&&objects.has(k))return null;counts.writes++;if(writeFailure){writeFailure=false;throw Error('temporary R2 failure');}objects.set(k,{bytes:Buffer.from(b),...m});return {key:k};},async delete(){throw Error('Original deletion is forbidden in these tests');}
  }};
  const fetcher=async(u,o)=>{
   if(String(u).startsWith('https://love-media-api.'))return worker.fetch(new Request(u,o),env);
@@ -78,7 +78,17 @@ test('thumbnail writes reject unsigned clients and proof replay against another 
  });
 });
 test('missing thumbnail configuration falls back to explicit original metadata without weakening authorization',async()=>{
- const h=harness(Buffer.alloc(7));await withHarness(h,async()=>{delete process.env.LOVE_PHOTO_PROXY_SECRET;const meta=await call('variant=thumbnail&meta=1');assert.equal(meta.statusCode,200);assert.equal(meta.body.variant,'original');assert.equal(h.counts.writes,0);assert.equal(h.counts.reads,0);assert.equal(h.counts.supabase,4);});
+ const h=harness(Buffer.alloc(7));await withHarness(h,async()=>{delete process.env.LOVE_PHOTO_PROXY_SECRET;const meta=await call('variant=thumbnail&meta=1');assert.equal(meta.statusCode,200);assert.equal(meta.body.variant,'original');assert.equal(h.counts.writes,0);assert.equal(h.counts.reads,0);assert.equal(h.counts.supabase,4);const preparation=await thumbnailCall();assert.equal(preparation.statusCode,503);assert.equal(preparation.body.code,'MEDIA_THUMBNAIL_CONFIG');assert.notEqual(preparation.body.status,'ready');assert.equal(h.counts.writes,0);});
+});
+test('simultaneous Worker thumbnail writes are atomic and never overwrite the winning version',async()=>{
+ const original=await sharp({create:{width:20,height:20,channels:3,background:'#234567'}}).jpeg().toBuffer(),thumb=await makeThumbnail(original),h=harness(original);
+ let arrivals=0,release;const barrier=new Promise(resolve=>release=resolve),head=h.env.LOVE_MEDIA.head;
+ h.env.LOVE_MEDIA.head=async key=>{if(++arrivals<=2){if(arrivals===2)release();await barrier;return null;}return head(key);};
+ await withHarness(h,async()=>{
+  const stamp=String(Date.now()),proof=createHmac('sha256',h.env.LOVE_PHOTO_PROXY_SECRET).update(JSON.stringify([KEY,h.row.sha256,sha(thumb),thumb.length,stamp])).digest('hex');
+  const send=()=>worker.fetch(new Request('https://worker.invalid/api/media/'+encodeURIComponent(KEY)+'?photo=1&variant=thumbnail&version='+h.row.sha256,{method:'POST',body:thumb,headers:{Authorization:'Bearer synthetic-user-token','Content-Type':'image/webp','X-Photo-Timestamp':stamp,'X-Photo-Proof':proof}}),h.env);
+  const responses=await Promise.all([send(),send()]);assert.deepEqual(responses.map(r=>r.status).sort(),[200,201]);assert.equal(h.counts.writes,1);const metas=await Promise.all(responses.map(r=>r.json()));assert.equal(metas[0].version,metas[1].version);assert.deepEqual(h.objects.get(KEY).bytes,original);
+ });
 });
 test('post-association thumbnail generation is idempotent, coalesces concurrent work and preserves the original',async()=>{
  const bytes=await sharp({create:{width:1200,height:800,channels:3,background:'#345678'}}).jpeg({quality:90}).toBuffer(),h=harness(bytes);

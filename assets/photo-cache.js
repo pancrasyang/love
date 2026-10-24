@@ -23,6 +23,8 @@ function createLovePhotoCache({factory,name='love-private-photos-v1',limit=200*1
  const remove=(stores,id)=>{stores.meta.delete(id);stores.photos.delete(id);};
  return {
   async ticket(){try{return await transaction(async s=>(await request(s.control.get('generation')))?.value||0);}catch{return null;}},
+  // Presence is a routing hint only, never permission to display cached bytes.
+  async hasRef(account,ref){try{return Boolean(await transaction(async s=>(await request(s.meta.getAll())).some(row=>row.account===account&&row.ref===ref&&row.expiresAt>now())));}catch{return false;}},
   async get(id){try{return await transaction(async s=>{
    const meta=await request(s.meta.get(id));if(!meta)return null;
    if(meta.expiresAt<=now()){remove(s,id);return null;}

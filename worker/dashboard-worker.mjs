@@ -197,7 +197,13 @@ async function handle(request,env,trace){
     if(!await crypto.subtle.verify('HMAC',signingKey,signature,new TextEncoder().encode(material)))throw new HttpError(403,'缩略图写入验证失败','MEDIA_THUMBNAIL_PROOF');
     let image;try{image=inspectImage(bytes,'image/webp');}catch{throw new HttpError(415,'缩略图格式异常','MEDIA_FORMAT');}
     if(image.byteLength!==bytes.length)throw new HttpError(415,'缩略图内容异常','MEDIA_FORMAT');
-    try{await measure('r2_thumbnail_write',()=>env.LOVE_MEDIA.put(derivedKey,bytes,{httpMetadata:{contentType:'image/webp'},customMetadata:{sourceVersion:row.sha256,sha256:hash}}));}catch(error){if(error instanceof HttpError)throw error;throw new HttpError(503,'缩略图写入失败，请稍后重试','MEDIA_SOURCE_UNAVAILABLE');}
+    let written;try{written=await measure('r2_thumbnail_write',()=>env.LOVE_MEDIA.put(derivedKey,bytes,{onlyIf:new Headers({'If-None-Match':'*'}),sha256:hash,httpMetadata:{contentType:'image/webp'},customMetadata:{sourceVersion:row.sha256,sha256:hash}}));}catch(error){if(error instanceof HttpError)throw error;throw new HttpError(503,'缩略图写入失败，请稍后重试','MEDIA_SOURCE_UNAVAILABLE');}
+    if(written===null){
+     const winner=await measure('r2_thumbnail_read',()=>env.LOVE_MEDIA.head(derivedKey));
+     const winnerHash=winner?.customMetadata?.sha256;
+     if(!winner||winner.customMetadata?.sourceVersion!==row.sha256||!/^[a-f0-9]{64}$/.test(winnerHash||'')||!Number.isInteger(winner.size)||winner.size<=0||winner.size>512*1024||winner.httpMetadata?.contentType!=='image/webp')throw new HttpError(503,'缩略图并发写入结果异常','MEDIA_METADATA');
+     return json({size:winner.size,type:'image/webp',version:winnerHash,sha256:winnerHash,variant:'thumbnail',source_version:row.sha256});
+    }
     return json({size:bytes.length,type:'image/webp',version:hash,sha256:hash,variant:'thumbnail',source_version:row.sha256},201);
    }
    let meta=original,object;

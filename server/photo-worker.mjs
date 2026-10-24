@@ -56,7 +56,9 @@ async function ensureThumbnail(key,token,original,res){
 export async function prepareWorkerThumbnail(key,token,res){
  const {response,missing}=await request(key,token,'variant=thumbnail&meta=1',res);
  if(response)return {meta:checkedPhotoMeta(await response.json()),generated:false};
- return {meta:await ensureThumbnail(key,token,missing,res),generated:true};
+ const meta=await ensureThumbnail(key,token,missing,res);
+ if(meta.variant!=='thumbnail')throw new ApiError(503,'缩略图服务尚未配置，请稍后重试','MEDIA_THUMBNAIL_CONFIG');
+ return {meta,generated:true};
 }
 export async function workerPhoto(url,token,metaOnly,start,res){
  const key=url.searchParams.get('key'),variant=url.searchParams.get('variant')||'original',version=url.searchParams.get('version');

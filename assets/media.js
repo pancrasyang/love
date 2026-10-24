@@ -21,13 +21,13 @@ async function uploadImage(file,recordId){
 }
 async function removeImage(key){if(key)await mediaFetch('/api/media/'+encodeURIComponent(key),{method:'DELETE'});}
 async function prepareThumbnail(key,epoch=authEpoch){
- if(!key||!isCurrent(epoch))throw Error('请重新登录');const controller=new AbortController();mediaRequests.add(controller);
+ if(!key||!isCurrent(epoch))throw Error('请重新登录');const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),90000);mediaRequests.add(controller);
  try{
   let response;try{response=await fetch('/api/photo-thumbnail',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-Love-Request':'1'},body:JSON.stringify({key}),signal:controller.signal});}catch{throw Error('缩略图生成连接失败');}
   const body=await response.json().catch(()=>({}));if(!isCurrent(epoch))throw Error('登录状态已改变');
   if(!response.ok){if(response.status===401&&isSessionFailure(body)){clearPrivateView();showRoleChoices();$('authMessage').textContent='登录已失效，请重新登录。';}throw Object.assign(Error(body.error||'缩略图生成失败'),{code:body.code,status:response.status});}
   if(body.status!=='ready'||!/^[a-f0-9]{64}$/.test(body.version||'')||!/^[a-f0-9]{64}$/.test(body.source_version||''))throw Error('缩略图响应异常');return body;
- }finally{mediaRequests.delete(controller);}
+ }finally{clearTimeout(timer);mediaRequests.delete(controller);}
 }
 function refreshThumbnailPhoto(key){
  const job=photoJobs.get('r2:'+key+':thumbnail');if(!job||!photoLive(job))return;if(job.state==='loading'){job.refreshAfterLoad=true;return;}job.state='idle';job.meta=null;job.metaState='idle';job.batchFallback=false;job.compactFallback=false;job.thumbnailFallback=false;job.error=null;queuePhoto(job);pumpPhotos();
@@ -133,7 +133,7 @@ async function flushPhotoMeta(){
  photoMetaScheduled=false;if(photoPaused||photoMetaController)return;
  const jobs=[];for(const job of photoMetaPending){photoMetaPending.delete(job);if(photoLive(job)&&job.state==='idle'&&[...job.images].some(img=>img.isConnected&&img._photoVisible)){job.metaState='loading';jobs.push(job);}if(jobs.length===20)break;}
  if(!jobs.length){settlePhotoWaiters();return;}
- const serial=photoMetaSerial,controller=new AbortController();photoMetaController=controller;mediaRequests.add(controller);photoLoadMetrics.metaRequests++;photoLoadMetrics.metaBatches++;photoLoadMetrics.metaItems+=jobs.length;
+ const serial=photoMetaSerial,controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);photoMetaController=controller;mediaRequests.add(controller);photoLoadMetrics.metaRequests++;photoLoadMetrics.metaBatches++;photoLoadMetrics.metaItems+=jobs.length;
  try{
   let response;try{response=await fetch('/api/photo-meta',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-Love-Request':'1'},body:JSON.stringify({items:jobs.map(job=>({key:job.key,variant:job.variant}))}),signal:controller.signal});}catch{throw photoError('MEDIA_NETWORK','照片版本核验连接失败');}
   if(!response.ok){const body=await response.json().catch(()=>({}));if(response.status===401&&isSessionFailure(body)&&serial===photoMetaSerial){clearPrivateView();showRoleChoices();$('authMessage').textContent='登录已失效，请重新登录。';}throw Object.assign(photoError(body.code||'MEDIA_HTTP_'+response.status,body.error||'照片版本核验失败'),{status:response.status});}
@@ -153,7 +153,7 @@ async function flushPhotoMeta(){
  }catch(error){
   for(const job of jobs)if(serial===photoMetaSerial&&photoLive(job)&&job.metaState==='loading'){job.metaState='idle';job.batchFallback=true;job.compactFallback=job.variant==='thumbnail'&&['MEDIA_SOURCE_UNAVAILABLE','MEDIA_HTTP_503'].includes(error.code);queuePhoto(job);}
  }finally{
-  mediaRequests.delete(controller);if(photoMetaController===controller)photoMetaController=null;
+  clearTimeout(timer);mediaRequests.delete(controller);if(photoMetaController===controller)photoMetaController=null;
   if(photoMetaPending.size&&!photoPaused&&!photoMetaScheduled){photoMetaScheduled=true;Promise.resolve().then(flushPhotoMeta);}pumpPhotos();settlePhotoWaiters();
  }
 }
@@ -169,7 +169,7 @@ async function readCompactThumbnail(job,controller,ticket){
 }
 async function readPhoto(job,controller){
  const ticket=await photoCache.ticket();
- if(!job.meta&&job.compactFallback&&job.variant==='thumbnail'){
+ if(!job.meta&&job.compactFallback&&job.variant==='thumbnail'&&!await photoCache.hasRef(job.owner,job.ref)){
   photoLoadMetrics.cacheMisses++;try{return await readCompactThumbnail(job,controller,ticket);}catch(error){if(!['MEDIA_VERSION_CHANGED','MEDIA_VARIANT_NOT_FOUND','MEDIA_NOT_FOUND'].includes(error.code))throw error;job.compactFallback=false;photoLoadMetrics.cacheMisses--;}
  }
  const meta=checkedClientMeta(job.meta||await photoStep(job,controller,job.query+'&meta=1',async response=>{try{return await response.json();}catch{throw photoError('MEDIA_METADATA');}}));job.meta=meta;job.thumbnailFallback=job.variant==='thumbnail'&&meta.variant==='original';
