@@ -8,6 +8,17 @@ async function limitedBody(request,limit=MAX_BYTES){
  try{for(;;){const {value,done}=await reader.read();if(done)break;n+=value.length;if(n>limit){await reader.cancel();throw new HttpError(413,'图片不能超过 10MB');}chunks.push(value);}}finally{reader.releaseLock();}
  const bytes=new Uint8Array(n);let pos=0;for(const c of chunks){bytes.set(c,pos);pos+=c.length;}return bytes;
 }
+async function limitedJson(request,limit=8192){
+ if(Number(request.headers.get('content-length'))>limit)throw new HttpError(413,'批量请求过大','MEDIA_BATCH_SIZE');
+ const reader=request.body?.getReader();if(!reader)throw new HttpError(400,'批量请求为空','MEDIA_BATCH_INPUT');let n=0,text='';const decoder=new TextDecoder('utf-8',{fatal:true});
+ try{for(;;){const {value,done}=await reader.read();if(done)break;n+=value.length;if(n>limit){await reader.cancel();throw new HttpError(413,'批量请求过大','MEDIA_BATCH_SIZE');}text+=decoder.decode(value,{stream:true});}text+=decoder.decode();}
+ catch(error){if(error instanceof HttpError)throw error;throw new HttpError(400,'批量请求格式不正确','MEDIA_BATCH_INPUT');}finally{reader.releaseLock();}
+ try{return JSON.parse(text);}catch{throw new HttpError(400,'批量请求格式不正确','MEDIA_BATCH_INPUT');}
+}
+async function mapLimit(items,limit,action){
+ const output=new Array(items.length);let next=0;
+ await Promise.all(Array.from({length:Math.min(limit,items.length)},async()=>{for(;;){const index=next++;if(index>=items.length)return;output[index]=await action(items[index],index);}}));return output;
+}
 async function handle(request,env,trace){
  async function measure(stage,action){
   trace.stage=stage;const began=Date.now();
@@ -18,6 +29,7 @@ async function handle(request,env,trace){
  const origin=request.headers.get('Origin');const allowed=(env.ALLOWED_ORIGINS||'').split(',').map(s=>s.trim()).filter(Boolean);
  const headers=new Headers({'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Vary':'Origin'});
  if(photoProtocol)headers.set('X-Love-Photo-Protocol','2');
+ if(new URL(request.url).pathname==='/api/photo-meta')headers.set('X-Love-Photo-Meta-Protocol','1');
  const json=(body,status=200)=>{if(body.code)trace.code=body.code;return new Response(JSON.stringify(status>=400?{...body,request_id:trace.request_id,stage:trace.stage}:body),{status,headers:new Headers([...headers,['Content-Type','application/json']])});};
  if(!allowed.length)return json({error:'文件服务尚未配置',code:'MEDIA_CONFIG'},503);
  if(origin&&!allowed.includes(origin))return json({error:'来源不允许',code:'MEDIA_ORIGIN_DENIED'},403);
@@ -44,6 +56,34 @@ async function handle(request,env,trace){
   if(!Array.isArray(profiles))throw new HttpError(503,'账号权限服务响应异常','PROFILE_RESPONSE');
   if(profiles.length!==1||!['pengpeng','kaikai'].includes(profiles[0].role))throw new HttpError(403,'账号未授权或会话已退出','PROFILE_DENIED');
   const url=new URL(request.url),path=url.pathname;
+  if(path==='/api/photo-meta'){
+   if(request.method!=='POST'||!photoProtocol)throw new HttpError(405,'请求方式不支持','MEDIA_METHOD');
+   headers.set('X-Love-Photo-Meta-Protocol','1');
+   const body=await limitedJson(request),items=body?.items;
+   if(!body||Object.keys(body).length!==1||!Array.isArray(items)||items.length<1||items.length>20)throw new HttpError(400,'批量照片参数不正确','MEDIA_BATCH_INPUT');
+   const pairs=new Set(),keys=new Set();
+   for(const item of items){if(!item||Object.keys(item).sort().join(',')!=='key,variant'||!KEY.test(item.key||'')||!['original','thumbnail'].includes(item.variant)||pairs.has(item.key+'\0'+item.variant))throw new HttpError(400,'批量照片参数不正确','MEDIA_BATCH_INPUT');pairs.add(item.key+'\0'+item.variant);keys.add(item.key);}
+   if(keys.size>20)throw new HttpError(400,'批量照片参数不正确','MEDIA_BATCH_INPUT');trace.batch_items=items.length;
+   const keyFilter=encodeURIComponent('in.('+[...keys].join(',')+')');
+   const media=await rest('/rest/v1/media_objects?key='+keyFilter+'&select=key,record_id,business_type,state,size_bytes,content_type,sha256');
+   if(!Array.isArray(media))throw new HttpError(503,'照片登记服务响应异常','REGISTRY_RESPONSE');
+   const rows=new Map(media.map(row=>[row.key,row])),byType={daily:[],spot:[]};
+   for(const row of media)if(row?.state==='ready'&&UUID.test(row.record_id||'')&&['daily','spot'].includes(row.business_type)&&row.key?.startsWith(row.business_type+'/'))byType[row.business_type].push(row.key);
+   const associated=new Set();
+   await Promise.all(['daily','spot'].map(async kind=>{if(!byType[kind].length)return;const filter=encodeURIComponent('in.('+byType[kind].join(',')+')'),table=kind==='daily'?'daily_checkins':'spot_checkins';const records=await rest('/rest/v1/'+table+'?photo_key='+filter+'&select=photo_key',{},'business');if(!Array.isArray(records))throw new HttpError(503,'照片关联服务响应异常','BUSINESS_RESPONSE');for(const record of records)if(typeof record.photo_key==='string')associated.add(record.photo_key);}));
+   const results=await mapLimit(items,4,async item=>{
+    const row=rows.get(item.key);if(!row||row.state!=='ready'||!associated.has(item.key))return {key:item.key,requested_variant:item.variant,status:'unavailable'};
+    if(!Number.isInteger(row.size_bytes)||row.size_bytes<=0||row.size_bytes>MAX_BYTES||!['image/jpeg','image/png','image/webp'].includes(row.content_type)||!/^[a-f0-9]{64}$/.test(row.sha256||''))return {key:item.key,requested_variant:item.variant,status:'error',code:'MEDIA_METADATA'};
+    if(item.variant==='original')return {key:item.key,requested_variant:item.variant,status:'available',size:row.size_bytes,type:row.content_type,version:row.sha256,sha256:row.sha256,variant:'original',source_version:row.sha256};
+    const derivedKey=`derived/thumbnail-v1/${row.sha256}/${item.key}.webp`;let object;
+    try{object=await measure('r2_thumbnail_read',()=>env.LOVE_MEDIA.head?env.LOVE_MEDIA.head(derivedKey):env.LOVE_MEDIA.get(derivedKey));}catch{return {key:item.key,requested_variant:item.variant,status:'error',code:'MEDIA_SOURCE_UNAVAILABLE'};}
+    if(!object)return {key:item.key,requested_variant:item.variant,status:'pending'};
+    const hash=object.customMetadata?.sha256,valid=object.customMetadata?.sourceVersion===row.sha256&&/^[a-f0-9]{64}$/.test(hash||'')&&Number.isInteger(object.size)&&object.size>0&&object.size<=512*1024&&object.httpMetadata?.contentType==='image/webp';
+    await object.body?.cancel?.();if(!valid)return {key:item.key,requested_variant:item.variant,status:'error',code:'MEDIA_METADATA'};
+    return {key:item.key,requested_variant:item.variant,status:'available',size:object.size,type:'image/webp',version:hash,sha256:hash,variant:'thumbnail',source_version:row.sha256};
+   });
+   trace.batch_available=results.filter(result=>result.status==='available').length;return json({results});
+  }
   if(path==='/api/media'&&request.method==='POST'){
    const recordId=request.headers.get('X-Record-Id');if(!UUID.test(recordId||''))throw new HttpError(400,'记录编号不正确');
    let bytes=await limitedBody(request);let image;
@@ -78,6 +118,11 @@ async function handle(request,env,trace){
     if(variant!=='thumbnail'||url.searchParams.get('version')!==row.sha256)throw new HttpError(412,'照片版本已改变','MEDIA_VERSION_CHANGED');
     const secret=env.LOVE_PHOTO_PROXY_SECRET;
     if(typeof secret!=='string'||secret.length<32)throw new HttpError(503,'缩略图服务尚未配置','MEDIA_THUMBNAIL_CONFIG');
+    const existing=await measure('r2_thumbnail_read',()=>env.LOVE_MEDIA.head?env.LOVE_MEDIA.head(derivedKey):env.LOVE_MEDIA.get(derivedKey));
+    if(existing){
+     const hash=existing.customMetadata?.sha256,valid=existing.customMetadata?.sourceVersion===row.sha256&&/^[a-f0-9]{64}$/.test(hash||'')&&Number.isInteger(existing.size)&&existing.size>0&&existing.size<=512*1024&&existing.httpMetadata?.contentType==='image/webp';
+     await existing.body?.cancel?.();if(!valid)throw new HttpError(503,'缩略图登记异常','MEDIA_METADATA');await request.body?.cancel?.();return json({size:existing.size,type:'image/webp',version:hash,sha256:hash,variant:'thumbnail',source_version:row.sha256});
+    }
     const bytes=await limitedBody(request,512*1024),stamp=request.headers.get('X-Photo-Timestamp'),proof=request.headers.get('X-Photo-Proof');
     if(!/^\d{13}$/.test(stamp||'')||Math.abs(Date.now()-Number(stamp))>60000||!/^[a-f0-9]{64}$/.test(proof||''))throw new HttpError(403,'缩略图写入验证失败','MEDIA_THUMBNAIL_PROOF');
     const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join('');
@@ -87,7 +132,13 @@ async function handle(request,env,trace){
     if(!await crypto.subtle.verify('HMAC',signingKey,signature,new TextEncoder().encode(material)))throw new HttpError(403,'缩略图写入验证失败','MEDIA_THUMBNAIL_PROOF');
     let image;try{image=inspectImage(bytes,'image/webp');}catch{throw new HttpError(415,'缩略图格式异常','MEDIA_FORMAT');}
     if(image.byteLength!==bytes.length)throw new HttpError(415,'缩略图内容异常','MEDIA_FORMAT');
-    await measure('r2_thumbnail_write',()=>env.LOVE_MEDIA.put(derivedKey,bytes,{httpMetadata:{contentType:'image/webp'},customMetadata:{sourceVersion:row.sha256,sha256:hash}}));
+    let written;try{written=await measure('r2_thumbnail_write',()=>env.LOVE_MEDIA.put(derivedKey,bytes,{onlyIf:new Headers({'If-None-Match':'*'}),sha256:hash,httpMetadata:{contentType:'image/webp'},customMetadata:{sourceVersion:row.sha256,sha256:hash}}));}catch(error){if(error instanceof HttpError)throw error;throw new HttpError(503,'缩略图写入失败，请稍后重试','MEDIA_SOURCE_UNAVAILABLE');}
+    if(written===null){
+     const winner=await measure('r2_thumbnail_read',()=>env.LOVE_MEDIA.head(derivedKey));
+     const winnerHash=winner?.customMetadata?.sha256;
+     if(!winner||winner.customMetadata?.sourceVersion!==row.sha256||!/^[a-f0-9]{64}$/.test(winnerHash||'')||!Number.isInteger(winner.size)||winner.size<=0||winner.size>512*1024||winner.httpMetadata?.contentType!=='image/webp')throw new HttpError(503,'缩略图并发写入结果异常','MEDIA_METADATA');
+     return json({size:winner.size,type:'image/webp',version:winnerHash,sha256:winnerHash,variant:'thumbnail',source_version:row.sha256});
+    }
     return json({size:bytes.length,type:'image/webp',version:hash,sha256:hash,variant:'thumbnail',source_version:row.sha256},201);
    }
    let meta=original,object;

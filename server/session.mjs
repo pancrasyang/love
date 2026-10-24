@@ -40,5 +40,5 @@ export async function validate(token){
 // This reads/refreshes the HttpOnly cookie; it never authorizes a data operation.
 export async function photoCredentials(req,res){try{let data=readSession(req);if(!data)throw new ApiError(401,'请先登录','SESSION_REQUIRED');if(data.expires_at<Date.now()/1000+60)data=setSession(res,await refresh(data.refresh_token));return data;}catch(error){if(error instanceof ApiError&&error.status===401)clearSession(res);throw error;}}
 export async function authenticate(req,res,{optional=false}={}){try{let data=readSession(req);if(!data){if(optional)return null;throw new ApiError(401,'请先登录','SESSION_REQUIRED');}if(data.expires_at<Date.now()/1000+60)data=setSession(res,await refresh(data.refresh_token));return {...data,...await validate(data.access_token)};}catch(error){if(error instanceof ApiError&&error.status===401)clearSession(res);throw error;}}
-export function browserSession(data){return {access_token:data.access_token,expires_at:data.expires_at,user:data.user};}
+export function browserSession(data){return {access_token:data.access_token,expires_at:data.expires_at,user:data.user,profile:data.profile};}
 export async function revoke(token){const r=await upstream('/auth/v1/logout?scope=local',token,{method:'POST'},'AUTH');if(!r.ok&&r.status!==401)throw new ApiError(503,'退出失败，请联网后重试','AUTH_LOGOUT');}
