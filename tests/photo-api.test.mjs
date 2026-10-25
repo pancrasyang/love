@@ -47,7 +47,7 @@ test('Worker and Vercel share a request id and retain the upstream failure stage
 test('expected photo versions are checked after authorization and before R2 bytes are requested',async()=>{
  const version='a'.repeat(64),row={key:KEY,record_id:R,business_type:'daily',state:'ready',sha256:version,size_bytes:1,content_type:'image/jpeg'};let reached=false;
  const router=async(url,opt)=>{
-  if(String(url).startsWith('https://love-media-api.')){reached=true;return new Response(new Uint8Array([7]),{status:206,headers:{'Content-Type':'image/jpeg','Content-Range':'bytes 0-0/1'}});}
+  if(String(url).startsWith('https://love-media-api.')){reached=true;return new Response(new Uint8Array([7]),{status:206,headers:{'Content-Type':'image/jpeg','Content-Range':'bytes 0-0/1','X-Media-Version':version}});}
   return auth(url,opt)||(url.includes('/media_objects')?Response.json([row]):Response.json([{id:R}]));
  };
  const path='/api/photo?source=r2&key='+encodeURIComponent(KEY);

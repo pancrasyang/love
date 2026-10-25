@@ -38,7 +38,8 @@ async function forgetCachedPhoto(key){
  await photoCache.prune(currentProfile.id,{removeRefs:['r2:'+key,'r2:'+key+':thumbnail']});
 }
 const photoJobs=new Map(),photoBindings=new Map();
-const PHOTO_CHUNK=1048576,PHOTO_PARTIAL_LIMIT=40*PHOTO_CHUNK,PHOTO_PARTIAL_TTL=5*60*1000;
+const PHOTO_DEFAULT_PART_SIZE=1048576,PHOTO_PART_SIZES=[1048576,2097152,3145728];
+const PHOTO_MAX_READ_BYTES=20971520,PHOTO_PARTIAL_LIMIT=41943040,PHOTO_PARTIAL_TTL=5*60*1000;
 const PHOTO_REQUEST_TIMEOUT=45000,PHOTO_JOB_TIMEOUT=10*60*1000;
 let photoOwner=null,photoSerial=0,photoPaused=true,photoActive=0,photoQueue=[],photoWaiters=[],photoMetaSerial=0,photoMetaPending=new Set(),photoMetaScheduled=false,photoMetaController=null;
 let photoLoadMetrics={startedAt:Date.now(),metaRequests:0,metaBatches:0,metaItems:0,bodyRequests:0,bodyBytes:0,cacheHits:0,cacheMisses:0,cacheWriteFailures:0,firstPhotoMs:null};
@@ -100,7 +101,7 @@ async function photoRequest(query,controller){
  return response;
 }
 function checkedClientMeta(meta){
- if(!meta||!Number.isInteger(meta.size)||meta.size<=0||meta.size>20*PHOTO_CHUNK||!['image/jpeg','image/png','image/webp'].includes(meta.type)||typeof meta.version!=='string'||!meta.version||meta.version.length>128||meta.sha256!==undefined&&!/^[a-f0-9]{64}$/.test(meta.sha256)||meta.variant!==undefined&&!['original','thumbnail'].includes(meta.variant)||meta.source_version!==undefined&&!/^[a-f0-9]{64}$/.test(meta.source_version))throw photoError('MEDIA_METADATA');
+ if(!meta||!Number.isInteger(meta.size)||meta.size<=0||meta.size>PHOTO_MAX_READ_BYTES||!['image/jpeg','image/png','image/webp'].includes(meta.type)||typeof meta.version!=='string'||!meta.version||meta.version.length>128||meta.sha256!==undefined&&!/^[a-f0-9]{64}$/.test(meta.sha256)||meta.variant!==undefined&&!['original','thumbnail'].includes(meta.variant)||meta.source_version!==undefined&&!/^[a-f0-9]{64}$/.test(meta.source_version)||meta.part_size!==undefined&&!PHOTO_PART_SIZES.includes(meta.part_size))throw photoError('MEDIA_METADATA');
  if(meta.variant==='thumbnail'&&(meta.type!=='image/webp'||meta.size>512*1024))throw photoError('MEDIA_METADATA');return meta;
 }
 async function photoStep(job,parent,query,read,{retry=true}={}){
@@ -181,15 +182,17 @@ async function readPhoto(job,controller){
  const cached=await photoCache.get(id);
  if(cached&&photoLive(job)&&cached.blob.size===meta.size&&cached.blob.type===meta.type){photoLoadMetrics.cacheHits++;job.partial=null;return {blob:cached.blob,id};}
  photoLoadMetrics.cacheMisses++;if(cached)await photoCache.remove(id);
+ const negotiated=Boolean(job.key)&&meta.variant!=='thumbnail',partSize=negotiated?(meta.part_size??PHOTO_DEFAULT_PART_SIZE):PHOTO_DEFAULT_PART_SIZE;
  trimPhotoPartials();
- const signature=JSON.stringify([id,meta.size,meta.type,meta.sha256||null]);
- if(!resumable||!job.partial||job.partial.signature!==signature||Date.now()-job.partial.touched>PHOTO_PARTIAL_TTL)job.partial={signature,resumable,parts:[],bytes:0,touched:Date.now()};
+ const signature=JSON.stringify([id,meta.size,meta.type,meta.sha256||null,partSize]);
+ if(!resumable||!job.partial||job.partial.signature!==signature||job.partial.part_size!==partSize||Date.now()-job.partial.touched>PHOTO_PARTIAL_TTL)job.partial={signature,part_size:partSize,resumable,parts:[],bytes:0,touched:Date.now()};
  const partial=job.partial;partial.touched=Date.now();
- for(let start=partial.bytes,part=partial.parts.length;start<meta.size;start+=PHOTO_CHUNK,part++){
-  const data=await photoStep(job,controller,(meta.variant==='original'?job.query.replace('&variant=thumbnail',''):job.query)+'&part='+part+'&version='+encodeURIComponent(meta.version),async r=>{
+ for(let start=partial.bytes,part=partial.parts.length;start<meta.size;start+=partSize,part++){
+  const data=await photoStep(job,controller,(meta.variant==='original'?job.query.replace('&variant=thumbnail',''):job.query)+'&part='+part+'&version='+encodeURIComponent(meta.version)+(negotiated?'&part_size='+partSize:''),async r=>{
    const range=r.headers.get('Content-Range')?.match(/^bytes (\d+)-(\d+)\/(\d+)$/);
    if(r.headers.get('X-Media-Version')!==meta.version){try{await r.body?.cancel();}catch{}throw photoError('MEDIA_VERSION_CHANGED','照片已更新，请重试');}
-   if(!range||Number(range[1])!==start||Number(range[2])!==Math.min(start+PHOTO_CHUNK-1,meta.size-1)||Number(range[3])!==meta.size){try{await r.body?.cancel();}catch{}throw photoError('MEDIA_RANGE_INVALID');}
+   if(!range||Number(range[1])!==start||Number(range[2])!==Math.min(start+partSize-1,meta.size-1)||Number(range[3])!==meta.size){try{await r.body?.cancel();}catch{}throw photoError('MEDIA_RANGE_INVALID');}
+   if(negotiated&&(r.headers.get('Content-Type')||'').split(';')[0].trim().toLowerCase()!==meta.type){try{await r.body?.cancel();}catch{}throw photoError('MEDIA_FORMAT');}
    let bytes;try{bytes=await r.arrayBuffer();}catch{throw photoError('MEDIA_TRUNCATED','照片传输中断，请重试');}photoLoadMetrics.bodyBytes+=bytes.byteLength;
    if(bytes.byteLength!==Number(range[2])-start+1)throw photoError('MEDIA_TRUNCATED');return bytes;
   },{retry:resumable||start===0});
