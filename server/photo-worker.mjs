@@ -1,12 +1,13 @@
 import {createHash,createHmac} from 'node:crypto';
 import {ApiError,clearSession} from './session.mjs';
 import {measure,requestDiagnostics} from './diagnostics.mjs';
+import {DEFAULT_PART_SIZE,MAX_R2_BYTES,withPartSize} from './photo-parts.mjs';
 
 const ORIGIN='https://love-media-api.pancrasyang.workers.dev',BASE=ORIGIN+'/api/media/';
-const CHUNK=1048576,flights=new Map();
+const flights=new Map();
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
 export function checkedPhotoMeta(meta){
- if(!meta||!Number.isInteger(meta.size)||meta.size<=0||meta.size>10*CHUNK||!['image/jpeg','image/png','image/webp'].includes(meta.type)||!/^[a-f0-9]{64}$/.test(meta.sha256||'')||meta.version!==meta.sha256||!['original','thumbnail'].includes(meta.variant)||!/^[a-f0-9]{64}$/.test(meta.source_version||''))throw new ApiError(503,'照片元数据异常','MEDIA_METADATA');
+ if(!meta||!Number.isInteger(meta.size)||meta.size<=0||meta.size>MAX_R2_BYTES||!['image/jpeg','image/png','image/webp'].includes(meta.type)||!/^[a-f0-9]{64}$/.test(meta.sha256||'')||meta.version!==meta.sha256||!['original','thumbnail'].includes(meta.variant)||!/^[a-f0-9]{64}$/.test(meta.source_version||''))throw new ApiError(503,'照片元数据异常','MEDIA_METADATA');
  if(meta.variant==='thumbnail'&&(meta.type!=='image/webp'||meta.size>512*1024))throw new ApiError(503,'缩略图元数据异常','MEDIA_METADATA');
  return meta;
 }
@@ -60,10 +61,10 @@ export async function prepareWorkerThumbnail(key,token,res){
  if(meta.variant!=='thumbnail')throw new ApiError(503,'缩略图服务尚未配置，请稍后重试','MEDIA_THUMBNAIL_CONFIG');
  return {meta,generated:true};
 }
-export async function workerPhoto(url,token,metaOnly,start,res){
+export async function workerPhoto(url,token,metaOnly,start,res,partSize=DEFAULT_PART_SIZE){
  const key=url.searchParams.get('key'),variant=url.searchParams.get('variant')||'original',version=url.searchParams.get('version');
  const query='variant='+variant+(metaOnly?'&meta=1':'')+(version?'&version='+version:'');
- let {response,missing}=await request(key,token,query,res,metaOnly?{}:{headers:{Range:`bytes=${start}-${start+CHUNK-1}`}});
+ let {response,missing}=await request(key,token,query,res,metaOnly?{}:{headers:{Range:`bytes=${start}-${start+partSize-1}`}});
  if(missing){
   if(!metaOnly)throw new ApiError(412,'缩略图已更新，请重试','MEDIA_VERSION_CHANGED');
   let meta;
@@ -88,7 +89,7 @@ export async function workerPhotoBatch(items,token,res){
  const expected=new Set(items.map(item=>item.key+'\0'+item.variant)),seen=new Set();
  for(const result of data.results){
   const pair=result?.key+'\0'+result?.requested_variant;if(!expected.has(pair)||seen.has(pair)||!['available','pending','unavailable','error'].includes(result?.status))throw new ApiError(503,'照片元数据响应异常','MEDIA_METADATA');seen.add(pair);
-  if(result.status==='available')checkedPhotoMeta(result);
+  if(result.status==='available'){checkedPhotoMeta(result);if(result.variant==='original')Object.assign(result,withPartSize(result));}
   if(result.status==='pending'&&result.requested_variant!=='thumbnail')throw new ApiError(503,'照片元数据响应异常','MEDIA_METADATA');
   if(result.status==='error'&&!['MEDIA_METADATA','MEDIA_SOURCE_UNAVAILABLE'].includes(result.code))throw new ApiError(503,'照片元数据响应异常','MEDIA_METADATA');
  }
