@@ -36,6 +36,10 @@
 
 这些是隔离测试证据，不是大陆移动网络性能证据，也不表示生产地点业务记录已经恢复。
 
+最终浏览器复测（代码 93c6b93feac94eb076f7f7d38988fd7775036da6）：https://love-j1di44fpc-pengpengkk-s-projects1.vercel.app ，部署 dpl_7A8uBmAzKp4wJEuBBaud18HdZ94y，target=null（preview）。Windows Edge 真实浏览器显示日常与地点样本，R2-only 显示占位；真实界面上传、显示、本人删除成功。首次两张缩略图正文共 2,338 字节；刷新有 2 次授权元数据请求、2 次缓存命中、0 次正文请求。退出后 IndexedDB meta/photos 均为 0，仅留下防止迟到请求回写的 generation 标记。整个流程 Worker/R2 请求 0，页面脚本错误 0。实测发现的退出持久缓存未清问题已修复，并增加回归验证。99/99 本地测试、构建及 GitHub Actions 44341193544 全通过。
+
+上述浏览器运行于本机环境，不是指定的大陆真实移动网络样本，不使用其中耗时推断回切速度。MIME/超限、失败重试、保存失败与跨账号延迟请求已有本地自动测试；移动弱网与双设备真实验收仍须补做。
+
 ## 权限提案（生产仅审查）
 
 见 supabase/proposals/restore-storage.sql。它已用于隔离测试，生产仍须显式人工批准，不在自动迁移目录内；本 PR 没有新增自动 SQL 或自动部署工作流。
