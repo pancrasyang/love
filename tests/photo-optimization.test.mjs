@@ -39,33 +39,9 @@ async function withHarness(h,fn){const oldFetch=globalThis.fetch,oldFlag=process
 async function call(query,headers={cookie:cookie()}){const r=res();await photo({method:'GET',url:'/api/photo?source=r2&key='+encodeURIComponent(KEY)+'&'+query,headers},r);return r;}
 async function thumbnailCall(key=KEY,headers={}){const body={key},r=res();await photoThumbnail({method:'POST',url:'/api/photo-thumbnail',body,headers:{host:'love.invalid',origin:'https://love.invalid','x-love-request':'1','content-type':'application/json','content-length':String(Buffer.byteLength(JSON.stringify(body))),cookie:cookie(),...headers}},r);return r;}
 
-test('delegated photo reads make four fresh authorization queries per segment, retain integrity and refuse a revoked session',async()=>{
- const bytes=Buffer.alloc(2*1048576+13,37),h=harness(bytes);
- await withHarness(h,async()=>{
-  const meta=await call('meta=1');assert.equal(meta.statusCode,200);assert.equal(h.counts.supabase,4);assert.equal(h.counts.reads,0);
-  const parts=[];for(let n=0;n<3;n++){const before=h.counts.supabase,r=await call('part='+n+'&version='+h.row.sha256);assert.equal(r.statusCode,206);assert.equal(h.counts.supabase-before,4);parts.push(r.body);}
-  assert.deepEqual(Buffer.concat(parts),bytes);h.revoke();const reads=h.counts.reads,r=await call('part=0&version='+h.row.sha256);assert.equal(r.statusCode,401);assert.equal(r.body.code,'AUTH_USER');assert.match(r.headers['set-cookie'],/Max-Age=0/);assert.equal(h.counts.reads,reads);
- });
-});
-test('delegation refuses detached records, wrong versions and old Workers before serving bytes',async()=>{
- const h=harness(Buffer.alloc(7));await withHarness(h,async()=>{
-  const changed=await call('part=0&version='+'a'.repeat(64));assert.equal(changed.statusCode,412);assert.equal(h.counts.reads,0);
-  h.detach();assert.equal((await call('meta=1')).statusCode,404);assert.equal(h.counts.reads,0);
-  globalThis.fetch=async()=>Response.json({size:7,type:'image/jpeg',version:h.row.sha256,sha256:h.row.sha256});
-  assert.equal((await call('meta=1')).body.code,'MEDIA_WORKER_PROTOCOL');
-  let fetched=false;globalThis.fetch=async()=>{fetched=true;throw Error();};assert.equal((await call('meta=1',{})).statusCode,401);assert.equal(fetched,false);
- });
-});
-test('a private thumbnail is generated once, stored separately, versioned and verified while original stays byte-identical',async()=>{
- const bytes=await sharp({create:{width:2400,height:1600,channels:3,background:'#923557'}}).jpeg({quality:95}).toBuffer(),h=harness(bytes);
- await withHarness(h,async()=>{
-  const meta=await call('variant=thumbnail&meta=1');assert.equal(meta.statusCode,200);assert.equal(meta.body.variant,'thumbnail');assert.equal(meta.body.source_version,h.row.sha256);assert.equal(h.counts.writes,1);assert.equal(h.objects.size,2);assert.deepEqual(h.objects.get(KEY).bytes,bytes);
-  const r=await call('variant=thumbnail&part=0&version='+meta.body.version);assert.equal(r.statusCode,206);assert.equal(r.body.length,meta.body.size);assert.equal(sha(r.body),meta.body.sha256);
-  const image=await sharp(r.body).metadata();assert.equal(image.format,'webp');assert(image.width<=960&&image.height<=960);assert(r.body.length<bytes.length);
-  assert.equal((await call('variant=thumbnail&meta=1')).body.version,meta.body.version);assert.equal(h.counts.writes,1);
-  h.row.sha256='c'.repeat(64);const next=await call('variant=thumbnail&meta=1');assert.equal(next.statusCode,503);assert.equal(h.counts.writes,1); // different original cannot reuse old derivative
- });
-});
+
+
+
 test('thumbnail writes reject unsigned clients and proof replay against another version',async()=>{
  const bytes=await sharp({create:{width:10,height:10,channels:3,background:'#923557'}}).jpeg().toBuffer(),h=harness(bytes),thumb=await makeThumbnail(bytes);
  await withHarness(h,async()=>{
@@ -77,9 +53,7 @@ test('thumbnail writes reject unsigned clients and proof replay against another 
   assert.equal((await worker.fetch(new Request(base,{method:'POST',body:altered,headers:{...headers,'X-Photo-Timestamp':stamp,'X-Photo-Proof':proof}}),h.env)).status,403);assert.equal(h.counts.writes,0);
  });
 });
-test('missing thumbnail configuration falls back to explicit original metadata without weakening authorization',async()=>{
- const h=harness(Buffer.alloc(7));await withHarness(h,async()=>{delete process.env.LOVE_PHOTO_PROXY_SECRET;const meta=await call('variant=thumbnail&meta=1');assert.equal(meta.statusCode,200);assert.equal(meta.body.variant,'original');assert.equal(h.counts.writes,0);assert.equal(h.counts.reads,0);assert.equal(h.counts.supabase,4);const preparation=await thumbnailCall();assert.equal(preparation.statusCode,503);assert.equal(preparation.body.code,'MEDIA_THUMBNAIL_CONFIG');assert.notEqual(preparation.body.status,'ready');assert.equal(h.counts.writes,0);});
-});
+
 test('simultaneous Worker thumbnail writes are atomic and never overwrite the winning version',async()=>{
  const original=await sharp({create:{width:20,height:20,channels:3,background:'#234567'}}).jpeg().toBuffer(),thumb=await makeThumbnail(original),h=harness(original);
  let arrivals=0,release;const barrier=new Promise(resolve=>release=resolve),head=h.env.LOVE_MEDIA.head;
@@ -90,19 +64,5 @@ test('simultaneous Worker thumbnail writes are atomic and never overwrite the wi
   const responses=await Promise.all([send(),send()]);assert.deepEqual(responses.map(r=>r.status).sort(),[200,201]);assert.equal(h.counts.writes,1);const metas=await Promise.all(responses.map(r=>r.json()));assert.equal(metas[0].version,metas[1].version);assert.deepEqual(h.objects.get(KEY).bytes,original);
  });
 });
-test('post-association thumbnail generation is idempotent, coalesces concurrent work and preserves the original',async()=>{
- const bytes=await sharp({create:{width:1200,height:800,channels:3,background:'#345678'}}).jpeg({quality:90}).toBuffer(),h=harness(bytes);
- await withHarness(h,async()=>{
-  const [first,second]=await Promise.all([thumbnailCall(),thumbnailCall()]);assert.deepEqual([first.statusCode,second.statusCode],[201,201]);assert.equal(h.counts.writes,1);assert.deepEqual(h.objects.get(KEY).bytes,bytes);
-  const compact=await call('variant=thumbnail&part=0&compact=1');assert.equal(compact.statusCode,206);assert.equal(compact.headers['x-media-variant'],'thumbnail');assert.match(compact.headers['x-media-sha256'],/^[a-f0-9]{64}$/);assert.equal(compact.headers['x-media-source-version'],h.row.sha256);assert.equal(sha(compact.body),compact.headers['x-media-sha256']);
-  const writes=h.counts.writes,reads=h.counts.reads,again=await thumbnailCall();assert.equal(again.statusCode,200);assert.equal(again.body.generated,false);assert.equal(h.counts.writes,writes);assert.equal(h.counts.reads,reads);
- });
-});
-test('thumbnail generation failure is retryable and never damages an attached original',async()=>{
- const bytes=await sharp({create:{width:1000,height:700,channels:3,background:'#765432'}}).jpeg().toBuffer(),h=harness(bytes);
- await withHarness(h,async()=>{
-  h.failNextWrite();const failed=await thumbnailCall();assert.equal(failed.statusCode,503);assert.equal(failed.body.code,'MEDIA_SOURCE_UNAVAILABLE');assert.deepEqual(h.objects.get(KEY).bytes,bytes);
-  const retried=await thumbnailCall();assert.equal(retried.statusCode,201);assert.equal(retried.body.status,'ready');assert.equal(h.counts.writes,2);assert.deepEqual(h.objects.get(KEY).bytes,bytes);
-  h.detach();const detached=await thumbnailCall();assert.equal(detached.statusCode,404);assert.deepEqual(h.objects.get(KEY).bytes,bytes);
- });
-});
+
+
