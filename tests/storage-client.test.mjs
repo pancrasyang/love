@@ -1,4 +1,13 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {app,A} from './browser-harness.mjs';
+test('clearing a private session purges stored photos and rejects writes started before logout',async()=>{
+ const a=await app();try{
+  a.login();await a.run('restoreSession()');const ticket=await a.run('photoCache.ticket()');
+  await a.run(`photoCache.put({id:'private-test',account:'${A}',ref:'storage-v1:daily:test',version:'v1',mime:'image/jpeg'},new Blob(['private']),${ticket})`);
+  assert.equal((await a.run('photoCache.stats()')).count,1);a.run('clearPrivateView()');
+  assert.equal((await a.run('photoCache.stats()')).count,0);
+  assert.equal(await a.run(`photoCache.put({id:'late',account:'${A}',ref:'storage-v1:daily:late',version:'v1',mime:'image/jpeg'},new Blob(['late']),${ticket})`),false);
+ }finally{await a.close();}
+});
 test('historical Storage references win over old R2 keys; R2-only cards keep their records without any media request',async()=>{
  const a=await app({observer:true});try{
   a.login();a.rows.daily_checkins.push({id:'new-r2-only',author_id:A,content:'keep me',photo_key:'daily/r2-only',photo_path:'',photo_url:'',created_at:'2026-10-20'},{id:'historical',content:'old',photo_key:'daily/migrated',photo_path:'daily-checkins/old.jpg',created_at:'2026-06-01'});

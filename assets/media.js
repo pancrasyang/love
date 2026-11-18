@@ -252,7 +252,7 @@ window.addEventListener('scroll',updateFallbackVisibility,true);window.addEventL
 let cleanedFor=null;
 async function cleanupOrphanPhotos(){}
 const clearDailyData=window.clearPrivateData;
-window.clearPrivateData=()=>{closeOriginalPhoto();mediaRequests.forEach(c=>c.abort());mediaRequests.clear();resetPhotoLoads();cleanedFor=null;clearDailyData?.();};
+window.clearPrivateData=()=>{closeOriginalPhoto();mediaRequests.forEach(c=>c.abort());mediaRequests.clear();resetPhotoLoads();void photoCache.clear();cleanedFor=null;clearDailyData?.();};
 
 let originalPhotoDialog=null;
 function closeOriginalPhoto(){if(!originalPhotoDialog)return;originalPhotoDialog.remove();originalPhotoDialog=null;hydratePrivatePhotos();}
