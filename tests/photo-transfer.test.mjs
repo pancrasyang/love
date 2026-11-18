@@ -16,11 +16,11 @@ function image(url,bytes,version=hash(bytes),sha256=hash(bytes)){
 const outage=(status=503,extra={})=>Response.json({code:status===429?'MEDIA_SOURCE_RATE_LIMITED':'MEDIA_SOURCE_UNAVAILABLE',error:'synthetic outage'},{status,headers:extra});
 async function page(options={}){
  const a=await app({observer:true,...options});Object.defineProperty(a.w.crypto,'subtle',{value:webcrypto.subtle});
- a.login();a.rows.daily_checkins.push({id:'photo',author_id:A,content:'transfer sample',photo_key:'daily/test',created_at:'2026-10-13'});return a;
+ a.login();a.rows.daily_checkins.push({id:'photo',author_id:A,content:'transfer sample',photo_path:'daily/test',created_at:'2026-10-13'});return a;
 }
 async function start(a){await a.run('restoreSession()');a.visible([0]);await a.idle();}
 async function retry(a){const button=a.w.document.querySelector('.photo-retry');assert(button);button.click();await a.idle();}
-const ready=a=>assert.equal(a.w.document.querySelector('[data-media-key]').getAttribute('src'),'blob:test');
+const ready=a=>assert.equal(a.w.document.querySelector('[data-legacy-id]').getAttribute('src'),'blob:test');
 
 test('a transient failed segment retries in place and produces a verified complete image',async()=>{
  const bytes=Buffer.alloc(2*CHUNK+13,37),version=hash(bytes),a=await page(),parts=[];let metadata=0,failed=false;
@@ -40,7 +40,7 @@ test('bounded automatic retries preserve completed segments for a reauthorized m
  try{
   a.w.fetch=async url=>{const part=partOf(url);if(part===null)metadata++;else parts.push(part);return part===1&&!healthy?outage():image(url,bytes);};
   await start(a);assert.deepEqual(parts,[0,1,1,1]);assert.equal((await a.run('photoCache.stats()')).count,0);
-  healthy=true;await retry(a);ready(a);assert.deepEqual(parts,[0,1,1,1,1,2]);assert.equal(metadata,3); // one failed batch probe plus two individual metadata reads
+  healthy=true;await retry(a);ready(a);assert.deepEqual(parts,[0,1,1,1,1,2]);assert.equal(metadata,2); // one fresh authorization metadata read per attempt
  }finally{await a.close();}
 });
 
@@ -78,7 +78,7 @@ test('truncated bytes retry the failed segment, while a final hash mismatch drop
   await start(a);ready(a);assert.deepEqual(parts,[0,1,1]);
  }finally{await a.close();}
  const b=await page();
- try{b.w.fetch=async url=>image(url,bytes,'a'.repeat(64),'a'.repeat(64));await start(b);assert.equal((await b.run('photoCache.stats()')).count,0);assert.equal(b.run('[...photoJobs.values()][0].partial'),null);assert.match(b.w.document.querySelector('img[data-media-key]').alt,/MEDIA_HASH_MISMATCH/);}finally{await b.close();}
+ try{b.w.fetch=async url=>image(url,bytes,'a'.repeat(64),'a'.repeat(64));await start(b);assert.equal((await b.run('photoCache.stats()')).count,0);assert.equal(b.run('[...photoJobs.values()][0].partial'),null);assert.match(b.w.document.querySelector('img[data-legacy-id]').alt,/MEDIA_HASH_MISMATCH/);}finally{await b.close();}
 });
 
 test('a per-request timeout retries a stalled segment without losing an earlier segment',async()=>{
@@ -141,9 +141,9 @@ test('clearing the cache or expiring partial bytes forces a fresh download',asyn
 test('retained partial downloads stay within 40MiB and evicted photos download again',async()=>{
  const a=await page(),parts=new Map(),chunk=Buffer.alloc(CHUNK,7),size=20*CHUNK;let healthy=false;
  try{
-  a.rows.daily_checkins.push(...[1,2].map(n=>({id:'photo'+n,author_id:A,content:'large transfer',photo_key:'daily/test'+n,created_at:'2026-10-13'})));
+  a.rows.daily_checkins.push(...[1,2].map(n=>({id:'photo'+n,author_id:A,content:'large transfer',photo_path:'daily/test'+n,created_at:'2026-10-13'})));
   a.w.fetch=async url=>{
-   const part=partOf(url),key=input(url).searchParams.get('key');
+   const part=partOf(url),key=input(url).searchParams.get('id');
    if(part===null)return Response.json({size,type:'image/jpeg',version:'a'.repeat(64),resumable:true});
    const counts=parts.get(key)||[];counts.push(part);parts.set(key,counts);
    if(part===19&&!healthy)return outage();
@@ -152,9 +152,9 @@ test('retained partial downloads stay within 40MiB and evicted photos download a
   await a.run('restoreSession()');a.visible([0,1,2]);await a.idle();
   assert.equal((await a.run('photoCache.stats()')).count,0);
   const retained=a.run('[...photoJobs.values()].reduce((n,job)=>n+(job.partial?.bytes||0),0)');assert(retained<=40*CHUNK);
-  const evicted=a.run('[...photoJobs.values()].find(job=>!job.partial).ref.slice(3).replace(/:thumbnail$/, "")');assert(evicted);
+  const evicted=a.run('[...photoJobs.values()].find(job=>!job.partial).ref.split(":")[2]');assert(evicted);
   const before=parts.get(evicted).filter(part=>part===0).length;healthy=true;
-  const img=[...a.w.document.querySelectorAll('[data-media-key]')].find(img=>img.dataset.mediaKey===evicted);img.nextElementSibling.click();await a.idle();
+  const img=[...a.w.document.querySelectorAll('[data-legacy-id]')].find(img=>img.dataset.legacyId===evicted);img.nextElementSibling.click();await a.idle();
   assert.equal(parts.get(evicted).filter(part=>part===0).length,before+1);assert.equal(img.getAttribute('src'),'blob:test');
  }finally{await a.close();}
 });

@@ -107,10 +107,11 @@ function renderDailyCheckins(rows=loadedRows()){
  const existing=new Map([...list.querySelectorAll('.check-card')].map(card=>[card.dataset.recordId,card]));
  const cards=rows.map(item=>{
   const mine=item.author_id===currentProfile.id;
-  const photo=item.photo_key?`<img data-media-key="${escapeHtml(item.photo_key)}" data-photo-variant="thumbnail" alt="正在加载私人照片" loading="lazy">`:(item.photo_url||item.photo_path)?`<img data-legacy-kind="${item.source_kind||'daily'}" data-legacy-id="${escapeHtml(item.id)}" alt="正在加载历史照片" loading="lazy">`:'';
+  const hasStorage=Boolean(item.photo_path||item.photo_url);
+  const photo=hasStorage?`<img data-legacy-kind="${item.source_kind||'daily'}" data-legacy-id="${escapeHtml(item.id)}" data-photo-variant="thumbnail" alt="正在加载私人照片" loading="lazy">`:item.photo_key?'<div class="empty photo-unavailable">照片暂不可用（此照片未保存在原存储中）</div>':'';
   const comments=item.source_kind==='spot'?'':commentSectionMarkup(item);
   const tag=item.source_kind==='spot'?'📍 历史地点':'📝 '+escapeHtml(nameOf(item.author_id));
-  const markup=`<article class="check-card" data-record-id="${escapeHtml(item.id)}">${photo}<div class="check-body"><div class="meta-row"><span class="tag" ${item.source_kind==='spot'?'':`data-author-id="${escapeHtml(item.author_id)}"`}>${tag}</span><span>⏰ ${escapeHtml(formatDateTime(item.created_at))}</span></div><p>${escapeHtml(item.content)}</p>${item.photo_key?`<button type="button" class="ghost small-button" data-view-photo="${escapeHtml(item.photo_key)}">查看原图</button>`:''}${mine?`<div class="card-actions"><button class="ghost small-button" data-action="edit" data-id="${escapeHtml(item.id)}">编辑文字</button><button class="danger small-button" data-action="delete" data-id="${escapeHtml(item.id)}">删除</button></div>`:''}${comments}</div></article>`;
+  const markup=`<article class="check-card" data-record-id="${escapeHtml(item.id)}">${photo}<div class="check-body"><div class="meta-row"><span class="tag" ${item.source_kind==='spot'?'':`data-author-id="${escapeHtml(item.author_id)}"`}>${tag}</span><span>⏰ ${escapeHtml(formatDateTime(item.created_at))}</span></div><p>${escapeHtml(item.content)}</p>${hasStorage?`<button type="button" class="ghost small-button" data-view-photo="${escapeHtml(item.id)}" data-photo-kind="${item.source_kind||'daily'}">查看原图</button>`:''}${mine?`<div class="card-actions"><button class="ghost small-button" data-action="edit" data-id="${escapeHtml(item.id)}">编辑文字</button><button class="danger small-button" data-action="delete" data-id="${escapeHtml(item.id)}">删除</button></div>`:''}${comments}</div></article>`;
   const old=existing.get(String(item.id)),holder=document.createElement('template');holder.innerHTML=markup;const card=holder.content.firstElementChild;
   const before=old?.querySelector('img'),after=card.querySelector('img');
   if(before&&after&&before.dataset.mediaKey===after.dataset.mediaKey&&before.dataset.photoVariant===after.dataset.photoVariant&&before.dataset.legacyId===after.dataset.legacyId&&before.dataset.legacyKind===after.dataset.legacyKind)after.replaceWith(before);
@@ -213,30 +214,22 @@ function resetDailyForm(){
  editingDailyId=null;$('dailyForm').reset();$('dailyPhoto').disabled=false;$('dailySubmitBtn').textContent='在线发布日常打卡';
  $('dailyPreview').removeAttribute('src');$('dailyPreview').classList.remove('show');setStatus('dailyStatus','');syncRightRecordPanelsOnly();
 }
-async function finishPublishedThumbnail(key,epoch){
- const status=$('dailyStatus');setStatus('dailyStatus','日常已保存，正在生成缩略图…');
- try{await prepareThumbnail(key,epoch);if(!isCurrent(epoch))return;refreshThumbnailPhoto(key);setStatus('dailyStatus','保存成功，缩略图已就绪。');}
- catch(error){
-  if(!isCurrent(epoch))return;setStatus('dailyStatus','日常已保存；缩略图暂未生成，可重试或直接查看原图。');
-  const button=document.createElement('button');button.type='button';button.className='ghost small-button thumbnail-generate-retry';button.textContent='重试生成缩略图';button.onclick=async()=>{if(!isCurrent(epoch))return;button.disabled=true;button.textContent='正在重试…';await finishPublishedThumbnail(key,epoch);};status.append(button);
- }
-}
 $('dailyForm').addEventListener('submit',async event=>{
  event.preventDefault();if(!currentProfile||dailyBusy)return;
  const text=$('dailyText').value.trim(),file=$('dailyPhoto').files[0];if(!text)return;
  dailyBusy=true;$('dailySubmitBtn').disabled=true;const epoch=authEpoch,id=editingDailyId;
- setStatus('dailyStatus',id?'正在保存修改…':'正在保存日常…');let uploadedKey=null,linked=false;
+ setStatus('dailyStatus',id?'正在保存修改…':'正在保存日常…');let linked=false;
  try{
   let result;
   if(id)result=await sb.from('daily_checkins').update({content:text}).eq('id',id).select('id');
   else{
-   const recordId=crypto.randomUUID(),photo=await uploadImage(file,recordId);uploadedKey=photo.key;
+   const recordId=crypto.randomUUID(),photo=await uploadImage(file,recordId);
    if(!isCurrent(epoch))throw Error('登录已改变，请重新发布');
-   result=await sb.from('daily_checkins').insert({id:recordId,content:text,photo_key:photo.key,photo_url:'',photo_path:''}).select('id');
+   result=await sb.from('daily_checkins').insert({id:recordId,content:text,photo_key:null,photo_url:'',photo_path:photo.path}).select('id');
   }
   if(result.error||!result.data?.length)throw result.error||Error('记录未保存');
-  linked=true;if(!isCurrent(epoch))return;resetDailyForm();const preparation=uploadedKey?finishPublishedThumbnail(uploadedKey,epoch):Promise.resolve();await Promise.all([loadDailyCheckins(),preparation]);if(!uploadedKey)setStatus('dailyStatus','保存成功。');throwHearts();
- }catch(error){if(isCurrent(epoch)){if(uploadedKey&&!linked){try{await removeImage(uploadedKey);}catch{/* The server refuses deletion if an ambiguous save attached the photo. */}}setStatus('dailyStatus',linked?'日常已保存，页面刷新暂时失败。':error.message||'保存失败，请检查网络后重试。');}}
+  linked=true;if(!isCurrent(epoch))return;resetDailyForm();await loadDailyCheckins();setStatus('dailyStatus','保存成功。');throwHearts();
+ }catch(error){if(isCurrent(epoch)){setStatus('dailyStatus',linked?'日常已保存，页面刷新暂时失败。':error.message||'保存失败，请检查网络后重试。');}}
  finally{dailyBusy=false;$('dailySubmitBtn').disabled=false;}
 });
 async function deleteDailyCheckin(id){
@@ -244,8 +237,8 @@ async function deleteDailyCheckin(id){
  const epoch=authEpoch;dailyBusy=true;let removed=false;
  try{
   const {data,error}=await sb.from('daily_checkins').delete().eq('id',id).select('id');if(error||!data?.length)throw error||Error();removed=true;
-  if(isCurrent(epoch)){if(item.photo_key)await forgetCachedPhoto(item.photo_key);await loadDailyCheckins();if(item.photo_key)await removeImage(item.photo_key);}
- }catch{if(isCurrent(epoch)){cleanedFor=null;alert(removed?'记录已删除，照片清理暂未完成，下次登录会自动重试。':'删除失败，请刷新重试。');}}
+  if(isCurrent(epoch)){await forgetCachedPhoto(item.id);await loadDailyCheckins();}
+ }catch{if(isCurrent(epoch)){cleanedFor=null;alert(removed?'记录已删除，页面刷新暂未完成，请刷新查看。':'删除失败，请刷新重试。');}}
  finally{dailyBusy=false;}
 }
 $('dailyList').addEventListener('click',event=>{

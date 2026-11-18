@@ -1,42 +1,21 @@
-const MEDIA_API='https://love-media-api.pancrasyang.workers.dev';
 const mediaUrls=new Set(),mediaRequests=new Set();
-async function mediaFetch(path,options={},epoch=authEpoch){
- if(!isCurrent(epoch))throw Error('请重新登录');
- const {data:{session},error}=await sb.auth.getSession();
- if(error||!session||!isCurrent(epoch)||session.user.id!==currentProfile.id)throw Error('请重新登录');
- const controller=new AbortController();mediaRequests.add(controller);
+async function uploadImage(file,recordId){
+ if(!file)return {key:null,path:''};
+ if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>10*1024*1024)throw Error('请选择不超过 10MB 的 JPEG、PNG 或 WebP 照片。');
+ const epoch=authEpoch,controller=new AbortController();mediaRequests.add(controller);
  try{
-  const response=await fetch(MEDIA_API+path,{...options,cache:'no-store',signal:controller.signal,headers:{...options.headers,Authorization:`Bearer ${session.access_token}`}});
-  if(!isCurrent(epoch))throw Error('登录状态已改变');
-  if(!response.ok){const body=await response.json().catch(()=>({}));throw Error(body.error||'照片请求失败');}
-  // Read body while the controller remains registered, including large downloads.
-  const result=options.method==='DELETE'?null:options.method==='POST'?await response.json():await response.blob();
-  if(!isCurrent(epoch))throw Error('登录状态已改变');return result;
+  const response=await fetch('/api/storage-upload',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-Love-Request':'1'},body:JSON.stringify({id:recordId,type:file.type,size:file.size}),signal:controller.signal});
+  const body=await response.json();if(!isCurrent(epoch))throw Error('登录状态已改变');
+  if(!response.ok)throw Error(body.error||'照片上传失败');const {data:{session},error}=await sb.auth.getSession();
+  if(error||!session||!isCurrent(epoch))throw Error('请重新登录');
+  const upload=await fetch(body.upload_url,{method:'POST',cache:'no-store',headers:{'Content-Type':file.type,apikey:body.upload_key,Authorization:'Bearer '+session.access_token,'x-upsert':'false'},body:file,signal:controller.signal});
+  await upload.body?.cancel();if(!isCurrent(epoch))throw Error('登录状态已改变');
+  if(!upload.ok)throw Error('照片上传失败，请稍后重试');return {key:null,path:body.path};
  }finally{mediaRequests.delete(controller);}
 }
-async function uploadImage(file,recordId){
- if(!file)return {key:null};
- if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>10*1024*1024)throw Error('请选择不超过 10MB 的 JPEG、PNG 或 WebP 照片。');
- return mediaFetch('/api/media',{method:'POST',headers:{'Content-Type':file.type,'X-Record-Id':recordId},body:file});
-}
-async function removeImage(key){if(key)await mediaFetch('/api/media/'+encodeURIComponent(key),{method:'DELETE'});}
-async function prepareThumbnail(key,epoch=authEpoch){
- if(!key||!isCurrent(epoch))throw Error('请重新登录');const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),90000);mediaRequests.add(controller);
- try{
-  let response;try{response=await fetch('/api/photo-thumbnail',{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-Love-Request':'1'},body:JSON.stringify({key}),signal:controller.signal});}catch{throw Error('缩略图生成连接失败');}
-  const body=await response.json().catch(()=>({}));if(!isCurrent(epoch))throw Error('登录状态已改变');
-  if(!response.ok){if(response.status===401&&isSessionFailure(body)){clearPrivateView();showRoleChoices();$('authMessage').textContent='登录已失效，请重新登录。';}throw Object.assign(Error(body.error||'缩略图生成失败'),{code:body.code,status:response.status});}
-  if(body.status!=='ready'||!/^[a-f0-9]{64}$/.test(body.version||'')||!/^[a-f0-9]{64}$/.test(body.source_version||''))throw Error('缩略图响应异常');return body;
- }finally{clearTimeout(timer);mediaRequests.delete(controller);}
-}
-function refreshThumbnailPhoto(key){
- const job=photoJobs.get('r2:'+key+':thumbnail');if(!job||!photoLive(job))return;if(job.state==='loading'){job.refreshAfterLoad=true;return;}job.state='idle';job.meta=null;job.metaState='idle';job.batchFallback=false;job.compactFallback=false;job.thumbnailFallback=false;job.error=null;queuePhoto(job);pumpPhotos();
-}
+// Keep Storage originals and the R2 registry for rollback. No automatic physical deletion.
+async function forgetCachedPhoto(id){if(currentProfile)await photoCache.prune(currentProfile.id,{removeRefs:['storage-v1:daily:'+id,'storage-v1:daily:'+id+':thumbnail']});}
 const photoCache=createLovePhotoCache();
-async function forgetCachedPhoto(key){
- if(!currentProfile||!key)return;
- await photoCache.prune(currentProfile.id,{removeRefs:['r2:'+key,'r2:'+key+':thumbnail']});
-}
 const photoJobs=new Map(),photoBindings=new Map();
 const PHOTO_CHUNK=1048576,PHOTO_PARTIAL_LIMIT=40*PHOTO_CHUNK,PHOTO_PARTIAL_TTL=5*60*1000;
 const PHOTO_REQUEST_TIMEOUT=45000,PHOTO_JOB_TIMEOUT=10*60*1000;
@@ -69,8 +48,8 @@ window.resumePhotoLoads=owner=>{
  photoPaused=false;photoJobs.forEach(job=>{if(job.state==='ready')showPhoto(job);else queuePhoto(job);});pumpPhotos();
 };
 function photoDescriptor(img){
- const kind=img.dataset.legacyKind||'daily';
- return img.dataset.mediaKey?{ref:'r2:'+img.dataset.mediaKey+(img.dataset.photoVariant==='thumbnail'?':thumbnail':''),query:'source=r2&key='+encodeURIComponent(img.dataset.mediaKey)+(img.dataset.photoVariant==='thumbnail'?'&variant=thumbnail':''),key:img.dataset.mediaKey,variant:img.dataset.photoVariant==='thumbnail'?'thumbnail':'original'}:{ref:'legacy:'+kind+':'+img.dataset.legacyId,query:'source=legacy&kind='+kind+'&id='+encodeURIComponent(img.dataset.legacyId)};
+ const kind=img.dataset.legacyKind||'daily',variant=img.dataset.photoVariant==='thumbnail'?'thumbnail':'original';
+ return {ref:'storage-v1:'+kind+':'+img.dataset.legacyId+(variant==='thumbnail'?':thumbnail':''),query:'source=legacy&kind='+kind+'&id='+encodeURIComponent(img.dataset.legacyId)+(variant==='thumbnail'?'&variant=thumbnail':''),variant};
 }
 function photoError(code,message='照片暂时无法加载'){return Object.assign(new Error(message),{code});}
 function retryablePhotoError(error){
@@ -271,40 +250,18 @@ $('clearPhotoCache')?.addEventListener('click',()=>clearLocalPhotoCache());
 window.addEventListener('storage',event=>{if(event.key==='love-photo-cache-clear')clearLocalPhotoCache(false);});
 window.addEventListener('scroll',updateFallbackVisibility,true);window.addEventListener('resize',updateFallbackVisibility);
 let cleanedFor=null;
-async function cleanupOrphanPhotos(){
- if(!currentProfile||cleanedFor===currentProfile.id)return;
- const owner=currentProfile.id,epoch=authEpoch;cleanedFor=owner;
- const {data,error}=await sb.from('media_objects').select('key,record_id,created_at,state').eq('owner_id',owner);
- if(error||!isCurrent(epoch)){cleanedFor=null;return;}
- const candidates=(data||[]).filter(row=>row.state==='deleting'||Date.now()-new Date(row.created_at).getTime()>=3600000);
- for(let offset=0;offset<candidates.length;offset+=20){
-  if(!isCurrent(epoch))return;
-  const batch=candidates.slice(offset,offset+20),keys=batch.map(row=>row.key);
-  let daily,spots;
-  try{[daily,spots]=await Promise.all([
-   sb.from('daily_checkins').select('photo_key').in('photo_key',keys),
-   sb.from('spot_checkins').select('photo_key').in('photo_key',keys)
-  ]);}catch{cleanedFor=null;return;}
-  if(!isCurrent(epoch))return;
-  if(daily.error||spots.error){cleanedFor=null;return;}
-  const referenced=new Set([...(daily.data||[]),...(spots.data||[])].map(row=>row.photo_key).filter(Boolean));
-  for(const row of batch){
-   if(!isCurrent(epoch))return;if(referenced.has(row.key))continue;
-   try{await removeImage(row.key);await forgetCachedPhoto(row.key);}catch{cleanedFor=null;}
-  }
- }
-}
+async function cleanupOrphanPhotos(){}
 const clearDailyData=window.clearPrivateData;
-window.clearPrivateData=()=>{closeOriginalPhoto();mediaRequests.forEach(c=>c.abort());mediaRequests.clear();resetPhotoLoads();cleanedFor=null;clearDailyData?.();};
+window.clearPrivateData=()=>{closeOriginalPhoto();mediaRequests.forEach(c=>c.abort());mediaRequests.clear();resetPhotoLoads();void photoCache.clear();cleanedFor=null;clearDailyData?.();};
 
 let originalPhotoDialog=null;
 function closeOriginalPhoto(){if(!originalPhotoDialog)return;originalPhotoDialog.remove();originalPhotoDialog=null;hydratePrivatePhotos();}
-function openOriginalPhoto(key){
+function openOriginalPhoto(id,kind='daily'){
  if(!currentProfile||photoPaused)return;closeOriginalPhoto();
  const dialog=document.createElement('dialog');dialog.className='original-photo-dialog';dialog.setAttribute('aria-label','查看原图');
  const close=document.createElement('button');close.type='button';close.textContent='关闭原图';close.onclick=closeOriginalPhoto;
- const img=document.createElement('img');img.dataset.mediaKey=key;img.alt='正在加载原图';
+ const img=document.createElement('img');img.dataset.legacyId=id;img.dataset.legacyKind=kind;img.alt='正在加载原图';
  dialog.append(close,img);document.body.append(dialog);originalPhotoDialog=dialog;
  dialog.addEventListener('cancel',closeOriginalPhoto);dialog.showModal();hydratePrivatePhotos();
 }
-$('dailyList').addEventListener('click',event=>{const button=event.target.closest('[data-view-photo]');if(button)openOriginalPhoto(button.dataset.viewPhoto);});
+$('dailyList').addEventListener('click',event=>{const button=event.target.closest('[data-view-photo]');if(button)openOriginalPhoto(button.dataset.viewPhoto,button.dataset.photoKind||'daily');});
