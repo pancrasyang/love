@@ -269,10 +269,11 @@ async function forgetCachedPhoto(id){
 }
 async function updatePhotoCacheStatus(){
  const profile=currentProfile;
- if(!profile)return;
+ const status=$('photoCacheStatus');
+ if(!profile||!status)return;
  const stats=await photoCache.stats();
- if(currentProfile===profile&&$('photoCacheStatus')){
-  $('photoCacheStatus').textContent=stats.available?'本机照片缓存 '+(stats.bytes/1048576).toFixed(1)+'MB / 200MB':'照片缓存暂不可用，使用按需读取';
+ if(currentProfile===profile&&status.isConnected){
+  status.textContent=stats.available?'本机照片缓存 '+(stats.bytes/1048576).toFixed(1)+'MB / 200MB':'照片缓存暂不可用，使用按需读取';
  }
 }
 async function clearLocalPhotoCache(broadcast=true){
