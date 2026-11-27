@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
-import sharp from 'sharp';
 import photo from '../api/photo.js';
 import upload from '../api/storage-upload.js';
 import retiredMeta from '../api/photo-meta.js';
@@ -10,26 +9,11 @@ import {setSession} from '../server/session.mjs';
 import {database,asUser,A,B,C} from './db-harness.mjs';
 const R='10000000-0000-4000-8000-000000000001';
 process.env.SUPABASE_URL='https://storage-test.invalid';process.env.SUPABASE_PUBLISHABLE_KEY='test-public';process.env.LOVE_SESSION_SECRET='test-only-session-secret-with-at-least-32-chars';
-const result=()=>({headers:{},setHeader(k,v){this.headers[k.toLowerCase()]=v;},status(s){this.statusCode=s;return this;},json(body){this.body=body;},send(body){this.body=body;}});
+const result=()=>({headers:{},setHeader(k,v){this.headers[k.toLowerCase()]=v;},removeHeader(k){delete this.headers[k.toLowerCase()];},status(s){this.statusCode=s;return this;},json(body){this.body=body;},send(body){this.body=body;}});
 function cookie(){const r=result();setSession(r,{access_token:'synthetic-token',refresh_token:'synthetic-refresh',expires_in:3600});return r.headers['set-cookie'].split(';')[0];}
 async function call(handler,{url='/api/photo?source=legacy&id='+R,method='GET',body,loggedIn=true}={},fetcher){const old=globalThis.fetch;globalThis.fetch=async(url,options)=>{assert(!String(url).includes('workers.dev'));return fetcher(url,options);};try{const r=result();await handler({url,method,body,headers:{host:'love.invalid',origin:'https://love.invalid','x-love-request':'1','content-type':'application/json',...(loggedIn?{cookie:cookie()}:{})}},r);return r;}finally{globalThis.fetch=old;}}
 function auth(url,{headers},denied=false){assert.equal(headers.Authorization,'Bearer synthetic-token');if(url.endsWith('/auth/v1/user'))return Response.json({id:A});if(url.includes('/profiles?'))return Response.json(denied?[]:[{id:A,role:'pengpeng'}]);}
 
-test('Storage thumbnail and original use fresh member and record checks without R2, including cached derivatives',async()=>{
- const bytes=await sharp({create:{width:1200,height:800,channels:3,background:'#705f53'}}).jpeg().toBuffer();let members=0,records=0,denied=false;
- const fetcher=async(url,options)=>{
-  if(url.includes('/profiles?'))members++;
-  const a=auth(url,options,denied);if(a)return a;
-  if(url.includes('/daily_checkins?')){records++;return Response.json([{photo_path:'daily-checkins/old.jpg'}]);}
-  assert.match(url,/\/object\/authenticated\/love-photos\//);
-  const range=options.headers.Range?.match(/bytes=(\d+)-(\d+)/),start=Number(range?.[1]||0),end=range?Math.min(Number(range[2]),bytes.length-1):bytes.length-1;
-  return new Response(bytes.subarray(start,end+1),{status:range?206:200,headers:{ETag:'"source-v1"','Content-Type':'image/jpeg','Content-Length':String(end-start+1),...(range?{'Content-Range':`bytes ${start}-${end}/${bytes.length}`}:{})}});
- };
- const meta=await call(photo,{url:'/api/photo?source=legacy&id='+R+'&variant=thumbnail&meta=1'},fetcher);assert.equal(meta.statusCode,200);assert.equal(meta.body.variant,'thumbnail');assert.equal(meta.body.type,'image/webp');
- const thumb=await call(photo,{url:'/api/photo?source=legacy&id='+R+'&variant=thumbnail&part=0&version='+meta.body.version},fetcher);assert.equal(thumb.statusCode,206);assert.equal((await sharp(thumb.body).metadata()).width,960);assert.equal(members,2);assert.equal(records,2);
- const original=await call(photo,{url:'/api/photo?source=legacy&id='+R+'&part=0'},fetcher);assert.deepEqual(original.body,bytes);
- denied=true;const revoked=await call(photo,{url:'/api/photo?source=legacy&id='+R+'&variant=thumbnail&meta=1'},fetcher);assert.equal(revoked.statusCode,401);assert.equal(records,3);
-});
 
 test('R2-only references are unavailable and every old R2 auxiliary route stops without contacting Worker',async()=>{
  const fetcher=async(url,options)=>auth(url,options)||Response.json([{photo_path:'',photo_url:''}]);

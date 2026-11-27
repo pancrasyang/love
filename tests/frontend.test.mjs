@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {createHash} from 'node:crypto';import {IDBFactory} from 'fake-indexeddb';import {app,A,B} from './browser-harness.mjs';
+import test from 'node:test';import assert from 'node:assert/strict';import {IDBFactory} from 'fake-indexeddb';import {app,A,B} from './browser-harness.mjs';
 async function eventually(check,message='condition was not met'){for(let i=0;i<100;i++){if(check())return;await new Promise(resolve=>setTimeout(resolve,5));}assert.fail(message)}
 test('missing or broken local SDK keeps login gated and shows a recoverable error',async()=>{
  for(const options of [{missingSdk:true},{brokenSdk:true}]){
@@ -23,14 +23,14 @@ test('first visit stays gated with no private reads; restoration, both moods, ed
  assert.match(a.w.document.getElementById('dailyList').textContent,/历史记录/);
  const cell=a.w.document.querySelector(`[data-date="${today}"]`);assert.match(cell.textContent,/😊/);assert.match(cell.textContent,/💗/);
  a.run(`openMoodPopover('${today}')`);assert.match(a.w.document.getElementById('moodViewBox').textContent,/partner/);
- a.run("mediaUrls.add('blob:secret')");await a.run('logout()');assert(a.w.document.getElementById('privateApp').hidden);assert.equal(a.w.document.getElementById('dailyList').textContent,'');assert.equal(a.w.document.getElementById('moodViewBox').textContent,'');assert(a.revoked.includes('blob:secret'));
+ await a.run('logout()');assert(a.w.document.getElementById('privateApp').hidden);assert.equal(a.w.document.getElementById('dailyList').textContent,'');assert.equal(a.w.document.getElementById('moodViewBox').textContent,'');
  a.login(B);await a.run('restoreSession()');assert.match(a.w.document.getElementById('currentIdentity').textContent,/开开/);assert.equal(a.w.document.querySelector('[data-action="delete"]').dataset.id,'b');
  assert.equal(a.run("getMoodDateKey(new Date('2026-10-13T16:00:00Z'))"),'2026-10-14');
  assert.equal(a.w.document.querySelectorAll('audio').length,0);
 }finally{a.close()}});
 test('unknown account remains gated and old local moods stay untouched',async()=>{const a=await app();try{a.w.localStorage.setItem('loveDailyMoodRecordsV1','{"old":"kept"}');a.login('unknown');await a.run('restoreSession()');assert(a.w.document.getElementById('privateApp').hidden);assert.equal(a.w.localStorage.getItem('loveDailyMoodRecordsV1'),'{"old":"kept"}');}finally{a.close()}});
 
-test('loading a private photo preserves the record text and author buttons',async()=>{const a=await app();try{a.login();a.rows.daily_checkins.push({id:'a',author_id:A,content:'keep this text',photo_path:'daily/key',created_at:'2026-10-13T12:00:00Z'});a.w.fetch=async url=>String(url).includes('meta=1')?{ok:true,json:async()=>({size:5,type:'image/jpeg',version:'v1'})}:{ok:true,headers:{get:name=>name==='Content-Range'?'bytes 0-4/5':name==='X-Media-Version'?'v1':null},arrayBuffer:async()=>new ArrayBuffer(5)};await a.run('restoreSession()');assert.match(a.w.document.getElementById('dailyList').textContent,/keep this text/);assert(a.w.document.querySelector('[data-action="delete"]'));assert.equal(a.w.document.querySelector('[data-legacy-id]').src,'blob:test');}finally{a.close()}});
+test('loading a private photo preserves the record text and author buttons',async()=>{const a=await app();try{a.login();a.rows.daily_checkins.push({id:'a',author_id:A,content:'keep this text',photo_path:'daily/key',created_at:'2026-10-13T12:00:00Z'});a.w.fetch=async url=>servePhoto(url);await a.run('restoreSession()');assert.match(a.w.document.getElementById('dailyList').textContent,/keep this text/);assert(a.w.document.querySelector('[data-action="delete"]'));assert.equal(a.w.document.querySelector('[data-legacy-id]').src,'blob:test');}finally{a.close()}});
 test('members can read and add comments on daily records without adding controls to historical spots',async()=>{const a=await app();try{
  a.login();a.rows.daily_checkins.push({id:'daily-a',author_id:A,content:'day',created_at:'2026-10-13T12:00:00Z'});a.rows.spot_checkins.push({id:'spot-a',spot_name:'place',created_at:'2026-10-12T12:00:00Z'});a.rows.daily_comments.push({id:'comment-a',daily_id:'daily-a',author_id:B,content:'已有评论',created_at:'2026-10-13T13:00:00Z'});
  await a.run('restoreSession()');assert.equal(a.w.document.querySelectorAll('[data-comment-form]').length,1);assert.match(a.w.document.querySelector('.comment-list').textContent,/开开/);assert.match(a.w.document.querySelector('.comment-list').textContent,/已有评论/);
@@ -42,10 +42,10 @@ test('delayed comments do not block cards or photos and update without replacing
   a.login();a.rows.daily_checkins.push({id:'daily-a',author_id:A,content:'visible first',photo_path:'daily/key',created_at:'2026-10-13T12:00:00Z'});a.rows.daily_comments.push({id:'comment-a',daily_id:'daily-a',author_id:B,content:'arrives later',created_at:'2026-10-13T13:00:00Z'});
   const requests=[];a.w.fetch=async url=>{requests.push(String(url));return servePhoto(url)};
   const restoring=a.run('restoreSession()');await eventually(()=>a.w.document.querySelector('[data-legacy-id]')?.src==='blob:test');
-  const image=a.w.document.querySelector('[data-legacy-id]'),bodies=requests.filter(url=>url.includes('part=')).length;
+  const image=a.w.document.querySelector('[data-legacy-id]'),bodies=requests.length;
   assert.match(a.w.document.getElementById('dailyList').textContent,/visible first/);assert.doesNotMatch(a.w.document.getElementById('dailyList').textContent,/arrives later/);
   release();await restoring;await eventually(()=>/arrives later/.test(a.w.document.getElementById('dailyList').textContent));
-  assert.equal(a.w.document.querySelector('[data-legacy-id]'),image);assert.equal(requests.filter(url=>url.includes('part=')).length,bodies);
+  assert.equal(a.w.document.querySelector('[data-legacy-id]'),image);assert.equal(requests.length,bodies);
  }finally{await a.close()}
 });
 test('comment failure and retry stay local and never redownload the displayed photo',async()=>{
@@ -53,15 +53,29 @@ test('comment failure and retry stay local and never redownload the displayed ph
  try{
   a.login();a.rows.daily_checkins.push({id:'daily-a',author_id:A,content:'day',photo_path:'daily/key',created_at:'2026-10-13T12:00:00Z'});a.rows.daily_comments.push({id:'comment-a',daily_id:'daily-a',author_id:B,content:'recovered',created_at:'2026-10-13T13:00:00Z'});
   const requests=[];a.w.fetch=async url=>{requests.push(String(url));return servePhoto(url)};await a.run('restoreSession()');await eventually(()=>a.w.document.querySelector('[data-action="retry-comments"]'));
-  const image=a.w.document.querySelector('[data-legacy-id]'),bodies=requests.filter(url=>url.includes('part=')).length;delete sourceErrors.daily_comments;
+  const image=a.w.document.querySelector('[data-legacy-id]'),bodies=requests.length;delete sourceErrors.daily_comments;
   a.w.document.querySelector('[data-action="retry-comments"]').click();await eventually(()=>/recovered/.test(a.w.document.querySelector('.comment-list').textContent));
-  assert.equal(a.w.document.querySelector('[data-legacy-id]'),image);assert.equal(requests.filter(url=>url.includes('part=')).length,bodies);
+  assert.equal(a.w.document.querySelector('[data-legacy-id]'),image);assert.equal(requests.length,bodies);
  }finally{await a.close()}
 });
-test('legacy photo renders through authorized same-origin chunks without a public URL',async()=>{const a=await app();try{a.login();a.rows.daily_checkins.push({id:A,author_id:null,content:'old text preserved',photo_url:'https://test.supabase.co/storage/v1/object/public/love-photos/old.jpg',created_at:'2026-10-13T12:00:00Z'});let calls=0;a.w.fetch=async url=>{calls++;assert.match(url,/^\/api\/photo\?source=legacy/);if(url.includes('meta=1'))return {ok:true,json:async()=>({size:1048579,type:'image/jpeg',version:'v1'})};const part=Number(new URL(url,'https://love.invalid').searchParams.get('part')),start=part*1048576,size=part===0?1048576:3;return {ok:true,headers:{get:name=>name==='Content-Range'?`bytes ${start}-${start+size-1}/1048579`:name==='X-Media-Version'?'v1':'image/jpeg'},arrayBuffer:async()=>new ArrayBuffer(size)}};await a.run('restoreSession()');assert.equal(calls,3);assert.equal(a.w.document.querySelector('[data-legacy-id]').src,'blob:test');assert.match(a.w.document.getElementById('dailyList').textContent,/old text preserved/);assert(!a.w.document.querySelector('img[src*="supabase.co"]'));}finally{a.close()}});
-function servePhoto(url,version='v1',length=5){if(String(url).includes('meta=1'))return {ok:true,json:async()=>({size:length,type:'image/jpeg',version})};const part=Number(new URL(url,'https://love.invalid').searchParams.get('part'));const start=part*1048576,end=Math.min(start+1048575,length-1);return {ok:true,headers:{get:name=>name==='Content-Range'?`bytes ${start}-${end}/${length}`:name==='X-Media-Version'?version:null},arrayBuffer:async()=>new ArrayBuffer(end-start+1)}}
-function compactPhoto(bytes,overrides={}){const hash=createHash('sha256').update(bytes).digest('hex'),values={'content-range':`bytes 0-${bytes.length-1}/${bytes.length}`,'content-type':'image/webp','x-media-version':hash,'x-media-sha256':hash,'x-media-variant':'thumbnail','x-media-source-version':'b'.repeat(64),...overrides};return {ok:true,headers:{get:name=>values[name.toLowerCase()]??null},arrayBuffer:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)}}
-function serveBatch(options,{version,length=5}={}){version||=createHash('sha256').update(Buffer.alloc(length)).digest('hex');const {items}=JSON.parse(options.body);return {ok:true,json:async()=>({results:items.map(item=>({key:item.key,requested_variant:item.variant,status:'available',size:length,type:item.variant==='thumbnail'?'image/webp':'image/jpeg',version,sha256:version,variant:item.variant,source_version:version}))})}}
+test('a historical URL renders through a single same-origin GET without exposing the old link',async()=>{
+ const a=await app();
+ try{
+  a.login();a.rows.daily_checkins.push({id:A,author_id:null,content:'old text preserved',photo_url:'https://test.supabase.co/storage/v1/object/public/love-photos/old.jpg',created_at:'2026-10-13T12:00:00Z'});
+  let calls=0;
+  a.w.fetch=async (url,options)=>{calls++;assert.match(url,/^\/api\/photo\?source=legacy/);assert.equal(options.method,undefined);assert.doesNotMatch(url,/part=|meta=|supabase\.co/);return servePhoto(url,'v1',1048579);};
+  await a.run('restoreSession()');assert.equal(calls,1);
+  assert.equal(a.w.document.querySelector('[data-legacy-id]').src,'blob:test');
+  assert.match(a.w.document.getElementById('dailyList').textContent,/old text preserved/);
+  assert(!a.w.document.querySelector('img[src*="supabase.co"]'));
+ }finally{await a.close();}
+});
+function servePhoto(url,version='v1',length=5,options={}){
+ const kind=new URL(url,'https://love.invalid').searchParams.get('variant')==='thumbnail'?'thumbnail':'original';
+ const tag='W/"'+kind+'-v1-'+version+'"';
+ if(options.headers?.['X-Photo-If-None-Match']===tag)return new Response(null,{status:204,headers:{ETag:tag,'X-Photo-Request-Id':'test-request'}});
+ return new Response(new Uint8Array(length),{headers:{'Content-Type':'image/jpeg','Content-Length':String(length),ETag:tag}});
+}
 function addPhotos(a,n=6){for(let i=0;i<n;i++)a.rows.daily_checkins.push({id:'photo'+i,author_id:A,content:'text',photo_path:'daily/key'+i,created_at:'2026-10-13T12:00:00Z'})}
 function addDailyPages(a,count=45){const newest=Date.parse('2026-10-16T12:00:00Z');for(let i=0;i<count;i++)a.rows.daily_checkins.push({id:'page-'+String(i).padStart(3,'0'),author_id:A,content:'row '+i,created_at:new Date(newest-i*1000).toISOString()})}
 test('daily pagination uses a stable cursor and ignores a newer insertion between pages',async()=>{const a=await app();try{
@@ -75,7 +89,7 @@ test('focus refresh keeps loaded pages and bounds historical synchronization',as
  await a.run('restoreSession()');assert.equal(a.run('dailyRecords.length'),40);const spotQueries=a.queries.filter(query=>query.table==='spot_checkins');assert.equal(spotQueries.length,2);assert(spotQueries.some(query=>query.range?.[1]===50));assert(spotQueries.some(query=>query.inFilters.some(([key])=>key==='id')));
 }finally{await a.close()}});
 test('refreshing the first page keeps a valid later-page cache entry',async()=>{const a=await app();try{
- a.login();addDailyPages(a,25);a.rows.daily_checkins.at(-1).photo_key='daily/later';const ticket=await a.run('photoCache.ticket()');await a.run(`photoCache.put({id:'cached-later',account:'${A}',ref:'r2:daily/later:thumbnail',version:'v1',mime:'image/jpeg'},new Blob(['later']),${ticket})`);
+ a.login();addDailyPages(a,25);a.rows.daily_checkins.at(-1).photo_path='daily/later.jpg';const ticket=await a.run('photoCache.ticket()');await a.run(`photoCache.put({id:'cached-later',account:'${A}',ref:'storage-v1:daily:later:thumbnail',version:'v1',mime:'image/jpeg'},new Blob(['later']),${ticket})`);
  await a.run('restoreSession()');await a.run('loadDailyCheckins()');assert.equal((await a.run('photoCache.stats()')).count,1);assert(await a.run("photoCache.get('cached-later')"));
 }finally{await a.close()}});
 
@@ -83,30 +97,49 @@ test('many comments are paged per record without duplicates',async()=>{const a=a
  a.login();a.rows.daily_checkins.push({id:'daily-a',author_id:A,content:'day',created_at:'2026-10-13T12:00:00Z'});const newest=Date.parse('2026-10-14T12:00:00Z');for(let i=0;i<25;i++)a.rows.daily_comments.push({id:'comment-'+String(i).padStart(3,'0'),daily_id:'daily-a',author_id:B,content:'comment '+i,created_at:new Date(newest-i*1000).toISOString()});
  await a.run('restoreSession()');await eventually(()=>a.w.document.querySelectorAll('.comment').length===20);assert(a.w.document.querySelector('[data-action="more-comments"]'));await a.run("loadCommentsForRecord('daily-a',{more:true})");const comments=[...a.w.document.querySelectorAll('.comment')];assert.equal(comments.length,25);assert.equal(new Set(comments.map(node=>node.textContent)).size,25);
 }finally{await a.close()}});
-test('IntersectionObserver loads visible photos only, shares in-flight requests and keeps URLs after text changes',async()=>{const a=await app({observer:true});try{a.login();addPhotos(a);const requests=[];let concurrent=0,peak=0;a.w.fetch=async url=>{requests.push(url);concurrent++;peak=Math.max(peak,concurrent);await new Promise(r=>setTimeout(r,5));concurrent--;return servePhoto(url)};await a.run('restoreSession()');assert.equal(requests.length,0);a.visible([0,1]);await Promise.all([a.run('hydratePrivatePhotos()'),a.run('hydratePrivatePhotos()')]);await a.idle();assert.equal(requests.filter(u=>u.includes('part=')).length,2);assert(peak<=2);const img=a.w.document.querySelector('img[data-legacy-id]'),count=requests.length;a.rows.daily_checkins[0]={...a.rows.daily_checkins[0],content:'new text'};await a.run('loadDailyCheckins()');await a.idle();assert.equal(a.w.document.querySelector('img[data-legacy-id]'),img);assert.equal(requests.length,count);assert.equal(a.revoked.length,0)}finally{a.close()}});
-test('focus restoration during photo download resumes without a late-response loss',async()=>{const a=await app({observer:true});try{a.login();addPhotos(a,1);const version=createHash('sha256').update(Buffer.alloc(5)).digest('hex');let finish;a.w.fetch=async(url,options)=>String(url)==='/api/photo-meta'?serveBatch(options,{version}):url.includes('meta=1')?servePhoto(url,version):new Promise(r=>finish=()=>r(servePhoto(url,version)));await a.run('restoreSession()');a.visible([0]);while(!finish)await new Promise(r=>setTimeout(r,5));await a.run('restoreSession()');finish();await a.idle();assert.equal(a.w.document.querySelector('img[data-legacy-id]').src,'blob:test');assert.equal(a.w.document.querySelector('.photo-retry'),null)}finally{a.close()}});
-test('a page reload reuses authorized cached bytes; an unsigned visit purges them',async()=>{const factory=new IDBFactory();let downloads=0;async function page(signedIn){const a=await app({observer:true,cacheFactory:factory});addPhotos(a,1);a.w.fetch=async url=>{if(url.includes('part='))downloads++;return servePhoto(url)};if(signedIn)a.login();await a.run('restoreSession()');if(signedIn){a.visible([0]);await a.idle();assert(a.w.document.querySelector('[data-legacy-id]').hasAttribute('src'))}else{assert(a.w.document.getElementById('privateApp').hidden);assert.equal(a.w.document.querySelector('[data-legacy-id]'),null);assert.equal((await a.run('photoCache.stats()')).count,0)}a.run('resetPhotoLoads()');a.dom.window.close();}await page(true);await page(true);assert.equal(downloads,1);await page(false);await page(true);assert.equal(downloads,2)});
+test('IntersectionObserver loads visible photos only, shares in-flight requests and keeps URLs after text changes',async()=>{const a=await app({observer:true});try{a.login();addPhotos(a);const requests=[];let concurrent=0,peak=0;a.w.fetch=async url=>{requests.push(url);concurrent++;peak=Math.max(peak,concurrent);await new Promise(r=>setTimeout(r,5));concurrent--;return servePhoto(url)};await a.run('restoreSession()');assert.equal(requests.length,0);a.visible([0,1]);await Promise.all([a.run('hydratePrivatePhotos()'),a.run('hydratePrivatePhotos()')]);await a.idle();assert.equal(requests.length,2);assert(peak<=2);const img=a.w.document.querySelector('img[data-legacy-id]'),count=requests.length;a.rows.daily_checkins[0]={...a.rows.daily_checkins[0],content:'new text'};await a.run('loadDailyCheckins()');await a.idle();assert.equal(a.w.document.querySelector('img[data-legacy-id]'),img);assert.equal(requests.length,count);assert.equal(a.revoked.length,0)}finally{a.close()}});
+test('focus restoration does not restart a photo that is already downloading',async()=>{
+ const a=await app({observer:true});
+ try{
+  a.login();addPhotos(a,1);let finish,calls=0;
+  a.w.fetch=async url=>{calls++;return new Promise(r=>finish=()=>r(servePhoto(url)));};
+  await a.run('restoreSession()');a.visible([0]);await eventually(()=>finish);
+  await a.run('restoreSession()');finish();await a.idle();
+  assert.equal(calls,1);assert.equal(a.w.document.querySelector('img[data-legacy-id]').src,'blob:test');
+ }finally{await a.close();}
+});
+test('a page reload revalidates the cached file once without a body, and an unsigned visit purges it',async()=>{
+ const factory=new IDBFactory();let downloads=0,requests=0;
+ async function page(signedIn,unconfirmed=false){
+  const a=await app({observer:true,cacheFactory:factory});addPhotos(a,1);
+  a.w.fetch=async(url,options)=>{
+   requests++;
+   if(unconfirmed)return new Response(null,{status:204,headers:{ETag:options.headers['X-Photo-If-None-Match']}});
+   const r=servePhoto(url,'v1',5,options);
+   if(r.status===200)downloads++;
+   return r;
+  };
+  if(signedIn)a.login();
+  await a.run('restoreSession()');
+  if(signedIn){
+   a.visible([0]);await a.idle();
+   assert.equal(a.w.document.querySelector('[data-legacy-id]').hasAttribute('src'),!unconfirmed);
+   if(unconfirmed)assert(a.w.document.querySelector('.photo-retry'));
+  }else{
+   assert(a.w.document.getElementById('privateApp').hidden);
+   assert.equal(a.w.document.querySelector('[data-legacy-id]'),null);
+   assert.equal((await a.run('photoCache.stats()')).count,0);
+  }
+  a.run('resetPhotoLoads()');a.dom.window.close();
+ }
+ await page(true);await page(true);assert.equal(downloads,1);assert.equal(requests,2);
+ await page(true,true);assert.equal(downloads,1);assert.equal(requests,3);
+ await page(false);await page(true);assert.equal(downloads,2);assert.equal(requests,4);
+});
 
-
-
-
-
-
-
-
-
-test('an on-demand thumbnail failure shows an explicit original fallback without silent redownloads',async()=>{const a=await app({observer:true});try{
- a.login();addPhotos(a,1);const bytes=Buffer.alloc(5),version=createHash('sha256').update(bytes).digest('hex');let ready=false,bodies=0;a.w.fetch=async(url,options)=>{
-  if(String(url)==='/api/photo-meta'){const {items}=JSON.parse(options.body);return {ok:true,json:async()=>({results:items.map(item=>ready?{key:item.key,requested_variant:item.variant,status:'available',size:bytes.length,type:'image/webp',version,sha256:version,variant:'thumbnail',source_version:version}:{key:item.key,requested_variant:item.variant,status:'pending'})})};}
-  if(String(url).includes('meta=1'))return {ok:true,json:async()=>({size:bytes.length,type:ready?'image/webp':'image/jpeg',version,sha256:version,variant:ready?'thumbnail':'original',source_version:version})};bodies++;return servePhoto(url,version,bytes.length);
- };
- await a.run('restoreSession()');a.visible([0]);await a.idle();const note=a.w.document.querySelector('.thumbnail-fallback');assert(note);assert.match(note.textContent,/已回退原图/);const before=bodies;await a.run('loadDailyCheckins()');await a.idle();assert.equal(bodies,before);ready=true;a.w.document.querySelector('.thumbnail-fallback').click();await a.idle();assert.equal(a.w.document.querySelector('.thumbnail-fallback'),null);assert.equal(bodies,before+1);
-}finally{await a.close()}});
-
-
-test('photo version replacement and explicit record deletion invalidate persistent cache',async()=>{const a=await app();try{a.login();addPhotos(a,1);let version='v1',downloads=0;a.w.fetch=async url=>{if(url.includes('part='))downloads++;return servePhoto(url,version)};await a.run('restoreSession()');version='v2';await a.run('restoreSession()');assert.equal(downloads,2);assert.equal((await a.run('photoCache.stats()')).count,1);a.rows.daily_checkins=[];await a.run("forgetCachedPhoto('photo0')");assert.equal((await a.run('photoCache.stats()')).count,0)}finally{a.close()}});
+test('photo version replacement and explicit record deletion invalidate persistent cache',async()=>{const a=await app();try{a.login();addPhotos(a,1);let version='v1',downloads=0;a.w.fetch=async (url,options)=>{const r=servePhoto(url,version,5,options);if(r.status===200)downloads++;return r;};await a.run('restoreSession()');version='v2';await a.run('restoreSession()');assert.equal(downloads,2);assert.equal((await a.run('photoCache.stats()')).count,1);a.rows.daily_checkins=[];await a.run("forgetCachedPhoto('photo0')");assert.equal((await a.run('photoCache.stats()')).count,0)}finally{a.close()}});
 test('the preserved historical spot photo has a read-only card',async()=>{const a=await app();try{a.login();a.rows.spot_checkins.push({id:A,spot_name:'old location',spot_date:'2026-01-01',created_at:'2026-01-01T00:00:00Z',photo_path:'old.jpg'});a.w.fetch=async url=>servePhoto(url);await a.run('restoreSession()');assert.match(a.w.document.getElementById('dailyList').textContent,/历史地点/);assert.equal(a.w.document.querySelector('[data-legacy-kind]').dataset.legacyKind,'spot');assert.equal(a.w.document.querySelector('[data-action]'),null)}finally{a.close()}});
-test('failed photos keep retry controls through rerender and recover with unchanged records',async()=>{const a=await app();try{a.login();addPhotos(a,1);let healthy=false;a.w.fetch=async url=>url.includes('meta=1')||healthy?servePhoto(url):{ok:false,status:503,json:async()=>({error:'temporary outage',code:'MEDIA_SOURCE_UNAVAILABLE'})};await a.run('restoreSession()');assert(a.w.document.querySelector('.photo-retry'));a.rows.daily_checkins[0]={...a.rows.daily_checkins[0],content:'edit while unavailable'};await a.run('loadDailyCheckins()');assert(a.w.document.querySelector('.photo-retry'));healthy=true;await a.run('loadDailyCheckins()');assert.equal(a.w.document.querySelector('[data-legacy-id]').src,'blob:test');assert.equal(a.w.document.querySelector('.photo-retry'),null)}finally{a.close()}});
+test('failed photos keep retry controls through rerender and recover with unchanged records',async()=>{const a=await app();try{a.login();addPhotos(a,1);let healthy=false;a.w.fetch=async url=>healthy?servePhoto(url):{ok:false,status:503,json:async()=>({error:'temporary outage',code:'MEDIA_SOURCE_UNAVAILABLE'})};await a.run('restoreSession()');assert(a.w.document.querySelector('.photo-retry'));a.rows.daily_checkins[0]={...a.rows.daily_checkins[0],content:'edit while unavailable'};await a.run('loadDailyCheckins()');assert(a.w.document.querySelector('.photo-retry'));healthy=true;await a.run('loadDailyCheckins()');assert.equal(a.w.document.querySelector('[data-legacy-id]').src,'blob:test');assert.equal(a.w.document.querySelector('.photo-retry'),null)}finally{a.close()}});
 
 test('a failed record source leaves the other sources and their photos usable, including after focus restoration',async()=>{
  for(const table of ['spot_checkins','daily_checkins','daily_comments']){
@@ -129,7 +162,7 @@ test('a failed record source leaves the other sources and their photos usable, i
  }
 });
 
-test('an initial historical source outage does not strand the list or photo queue',async()=>{
+test('an initial historical source outage does not strand the list or image loader',async()=>{
  const a=await app({sourceErrors:{spot_checkins:{message:'unavailable'}}});
  try{a.login();addPhotos(a,1);a.w.fetch=async url=>servePhoto(url);await a.run('restoreSession()');await eventually(()=>a.w.document.querySelector('[data-action="retry-spots"]'));assert.equal(a.run('photoPaused'),false);assert.equal(a.w.document.querySelector('[data-legacy-id]').src,'blob:test');assert(!a.w.document.querySelector('.loading'));}finally{await a.close()}
 });

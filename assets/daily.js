@@ -114,7 +114,7 @@ function renderDailyCheckins(rows=loadedRows()){
   const markup=`<article class="check-card" data-record-id="${escapeHtml(item.id)}">${photo}<div class="check-body"><div class="meta-row"><span class="tag" ${item.source_kind==='spot'?'':`data-author-id="${escapeHtml(item.author_id)}"`}>${tag}</span><span>⏰ ${escapeHtml(formatDateTime(item.created_at))}</span></div><p>${escapeHtml(item.content)}</p>${hasStorage?`<button type="button" class="ghost small-button" data-view-photo="${escapeHtml(item.id)}" data-photo-kind="${item.source_kind||'daily'}">查看原图</button>`:''}${mine?`<div class="card-actions"><button class="ghost small-button" data-action="edit" data-id="${escapeHtml(item.id)}">编辑文字</button><button class="danger small-button" data-action="delete" data-id="${escapeHtml(item.id)}">删除</button></div>`:''}${comments}</div></article>`;
   const old=existing.get(String(item.id)),holder=document.createElement('template');holder.innerHTML=markup;const card=holder.content.firstElementChild;
   const before=old?.querySelector('img'),after=card.querySelector('img');
-  if(before&&after&&before.dataset.mediaKey===after.dataset.mediaKey&&before.dataset.photoVariant===after.dataset.photoVariant&&before.dataset.legacyId===after.dataset.legacyId&&before.dataset.legacyKind===after.dataset.legacyKind)after.replaceWith(before);
+  if(before&&after&&before.dataset.photoVariant===after.dataset.photoVariant&&before.dataset.legacyId===after.dataset.legacyId&&before.dataset.legacyKind===after.dataset.legacyKind)after.replaceWith(before);
   return card;
  });
  list.replaceChildren(...cards);updatePagination();
@@ -160,7 +160,7 @@ async function loadDailyCheckins(){
  }
  dailyRecords=page.rows;dailyCursor=page.cursor;dailyHasMore=page.hasMore;dailyPageBusy=false;sourceNotice('daily','');renderDailyCheckins();syncRightRecordPanelsOnly();
  const photos=hydratePrivatePhotos({recoverFailures:true});
- loadCommentsForRecords(page.rows,{refresh:true});cleanupOrphanPhotos();
+ loadCommentsForRecords(page.rows,{refresh:true});
  await photos;
 }
 async function loadMoreDailyCheckins(){

@@ -14,7 +14,6 @@ test('historical Storage references win over old R2 keys; R2-only cards keep the
   const calls=[];a.w.fetch=async url=>{calls.push(String(url));return Response.json({});};await a.run('restoreSession()');
   assert.match(a.w.document.querySelector('.photo-unavailable').textContent,/照片暂不可用/);assert.equal(a.rows.daily_checkins.length,2);assert.equal(a.rows.daily_checkins[0].photo_key,'daily/r2-only');
   const images=a.w.document.querySelectorAll('img[data-legacy-id]');assert.equal(images.length,1);assert.equal(images[0].dataset.legacyId,'historical');assert.equal(calls.length,0);
-  await a.run('cleanupOrphanPhotos()');assert.equal(calls.length,0);
  }finally{await a.close();}
 });
 test('new uploads use member-authenticated Supabase requests and return Storage paths without an R2 key',async()=>{
