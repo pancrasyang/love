@@ -43,7 +43,7 @@ test('clearing local photos invalidates validators, while logout purges cached f
   a.login();a.rows.daily_checkins.push(row);
   const calls=[];
   a.w.fetch=async (url,options)=>{
-   calls.push({url,conditional:options.headers['If-None-Match']});
+   calls.push({url,conditional:options.headers['X-Photo-If-None-Match']});
    return new Response('whole',{headers:{'Content-Length':'5','Content-Type':'image/jpeg',ETag:'W/"thumbnail-v1-file-v1"'}});
   };
   await a.run('restoreSession()');

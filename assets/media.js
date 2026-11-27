@@ -91,10 +91,10 @@ async function readPhoto(job,controller){
  photoLoadMetrics.requests++;
  const response=await fetch(job.url,{
   credentials:'same-origin',cache:'no-store',signal:controller.signal,
-  headers:etag?{'If-None-Match':etag}:{}
+  headers:etag?{'X-Photo-If-None-Match':etag}:{}
  });
  if(controller.signal.aborted||!photoIsCurrent(job))return null;
- if(response.status===304&&etag){
+ if(response.status===204&&etag&&response.headers.get('ETag')===etag&&response.headers.has('X-Photo-Request-Id')){
   photoLoadMetrics.cacheHits++;
   return {blob:saved.blob,etag};
  }

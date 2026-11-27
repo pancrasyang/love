@@ -78,20 +78,22 @@ test('the private original route streams a complete large file using one Storage
  });
 });
 
-test('version checks reuse a cached file via 304 but first verify membership and its record',async()=>{
+test('a bodyless validation response requires current membership and its record',async()=>{
  await fixture(async f=>{
   f.image({bytes:Buffer.from('one')});
   const cold=await f.get();
   const tag=cold.headers.get('ETag');
   await cold.arrayBuffer();
-  const conditional={'If-None-Match':tag};
+  const conditional={'X-Photo-If-None-Match':tag};
   assert.ok(tag);
   const warm=await f.get(PATH,conditional);
-  assert.equal(warm.status,304);
+  assert.equal(warm.status,204);
+  assert.equal(warm.headers.get('ETag'),tag);
+  assert.ok(warm.headers.get('X-Photo-Request-Id'));
   assert.equal((await warm.arrayBuffer()).byteLength,0);
   assert.equal(f.storageCalls().at(-1).options.headers['If-None-Match'],'"file-v1"');
   f.disableSourceRevalidation();
-  assert.equal((await f.get(PATH,conditional)).status,304);
+  assert.equal((await f.get(PATH,conditional)).status,204);
   f.image({bytes:Buffer.from('two'),tag:'"file-v2"'});
   const changed=await f.get(PATH,conditional);
   assert.equal(changed.status,200);
@@ -118,8 +120,8 @@ test('list uses a smaller thumbnail when possible and falls back to the original
   const thumb=Buffer.from(await first.arrayBuffer());
   assert((await sharp(thumb).metadata()).width===960&&thumb.length<large.length);
   assert.equal(f.storageCalls().length,1);
-  const warm=await f.get(list,{'If-None-Match':first.headers.get('ETag')});
-  assert.equal(warm.status,304);
+  const warm=await f.get(list,{'X-Photo-If-None-Match':first.headers.get('ETag')});
+  assert.equal(warm.status,204);
   const small=await sharp({create:{width:1,height:1,channels:3,background:'#334455'}}).webp({quality:78,effort:4}).toBuffer();
   f.image({bytes:small,type:'image/webp',tag:'"tiny"'});
   const fallback=await f.get(list.replace('source=legacy','source=legacy&kind=spot'));

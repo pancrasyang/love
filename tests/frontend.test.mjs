@@ -73,7 +73,7 @@ test('a historical URL renders through a single same-origin GET without exposing
 function servePhoto(url,version='v1',length=5,options={}){
  const kind=new URL(url,'https://love.invalid').searchParams.get('variant')==='thumbnail'?'thumbnail':'original';
  const tag='W/"'+kind+'-v1-'+version+'"';
- if(options.headers?.['If-None-Match']===tag)return new Response(null,{status:304,headers:{ETag:tag}});
+ if(options.headers?.['X-Photo-If-None-Match']===tag)return new Response(null,{status:204,headers:{ETag:tag,'X-Photo-Request-Id':'test-request'}});
  return new Response(new Uint8Array(length),{headers:{'Content-Type':'image/jpeg','Content-Length':String(length),ETag:tag}});
 }
 function addPhotos(a,n=6){for(let i=0;i<n;i++)a.rows.daily_checkins.push({id:'photo'+i,author_id:A,content:'text',photo_path:'daily/key'+i,created_at:'2026-10-13T12:00:00Z'})}
@@ -110,14 +110,21 @@ test('focus restoration does not restart a photo that is already downloading',as
 });
 test('a page reload revalidates the cached file once without a body, and an unsigned visit purges it',async()=>{
  const factory=new IDBFactory();let downloads=0,requests=0;
- async function page(signedIn){
+ async function page(signedIn,unconfirmed=false){
   const a=await app({observer:true,cacheFactory:factory});addPhotos(a,1);
-  a.w.fetch=async(url,options)=>{requests++;const r=servePhoto(url,'v1',5,options);if(r.status===200)downloads++;return r;};
+  a.w.fetch=async(url,options)=>{
+   requests++;
+   if(unconfirmed)return new Response(null,{status:204,headers:{ETag:options.headers['X-Photo-If-None-Match']}});
+   const r=servePhoto(url,'v1',5,options);
+   if(r.status===200)downloads++;
+   return r;
+  };
   if(signedIn)a.login();
   await a.run('restoreSession()');
   if(signedIn){
    a.visible([0]);await a.idle();
-   assert(a.w.document.querySelector('[data-legacy-id]').hasAttribute('src'));
+   assert.equal(a.w.document.querySelector('[data-legacy-id]').hasAttribute('src'),!unconfirmed);
+   if(unconfirmed)assert(a.w.document.querySelector('.photo-retry'));
   }else{
    assert(a.w.document.getElementById('privateApp').hidden);
    assert.equal(a.w.document.querySelector('[data-legacy-id]'),null);
@@ -126,7 +133,8 @@ test('a page reload revalidates the cached file once without a body, and an unsi
   a.run('resetPhotoLoads()');a.dom.window.close();
  }
  await page(true);await page(true);assert.equal(downloads,1);assert.equal(requests,2);
- await page(false);await page(true);assert.equal(downloads,2);assert.equal(requests,3);
+ await page(true,true);assert.equal(downloads,1);assert.equal(requests,3);
+ await page(false);await page(true);assert.equal(downloads,2);assert.equal(requests,4);
 });
 
 test('photo version replacement and explicit record deletion invalidate persistent cache',async()=>{const a=await app();try{a.login();addPhotos(a,1);let version='v1',downloads=0;a.w.fetch=async (url,options)=>{const r=servePhoto(url,version,5,options);if(r.status===200)downloads++;return r;};await a.run('restoreSession()');version='v2';await a.run('restoreSession()');assert.equal(downloads,2);assert.equal((await a.run('photoCache.stats()')).count,1);a.rows.daily_checkins=[];await a.run("forgetCachedPhoto('photo0')");assert.equal((await a.run('photoCache.stats()')).count,0)}finally{a.close()}});

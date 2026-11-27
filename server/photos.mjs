@@ -85,7 +85,9 @@ export function photoHandler(req,res){return withDiagnostics(res,async()=>{
   if(rows.length!==1)throw new ApiError(404,'照片记录不存在','MEDIA_NOT_FOUND');
   const path=sourcePath(rows[0]);
 
-  const requestTag=req.headers['if-none-match'];
+  // Revalidate the site's IndexedDB entry inside this handler. An HTTP cache
+  // must not answer the browser's conditional request before authentication.
+  const requestTag=req.headers['x-photo-if-none-match'];
   const validator=photoValidator(requestTag,variant);
   const headers={'Accept-Encoding':'identity'};
   if(validator.sourceTag)headers['If-None-Match']=validator.sourceTag;
@@ -94,7 +96,7 @@ export function photoHandler(req,res){return withDiagnostics(res,async()=>{
   },'LEGACY_STORAGE');
   if(source.status===304&&validator.sourceTag){
    res.setHeader('ETag',requestTag);
-   return res.status(304).end();
+   return res.status(204).end();
   }
 
   upstreamStatus(source,{storage:true});
@@ -102,7 +104,7 @@ export function photoHandler(req,res){return withDiagnostics(res,async()=>{
   const etag=validator.forSource(source.headers.get('ETag'));
   if(etag){
    res.setHeader('ETag',etag);
-   if(etag===requestTag)return res.status(304).end();
+   if(etag===requestTag)return res.status(204).end();
   }
   if(variant==='original'){
    return await writePhoto(res,Readable.fromWeb(source.body),{...details,variant});
