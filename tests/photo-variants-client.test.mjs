@@ -1,29 +1,41 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createHash,webcrypto} from 'node:crypto';
 import {app,A} from './browser-harness.mjs';
-const hash=b=>createHash('sha256').update(b).digest('hex');
-const query=url=>new URL(url,'https://love.invalid').searchParams;
-function response(url,bytes,variant){const p=query(url),version=hash(bytes);if(p.has('meta'))return Response.json({size:bytes.length,type:variant==='thumbnail'?'image/webp':'image/jpeg',sha256:version,version,variant});const start=Number(p.get('part'))*1048576,end=Math.min(start+1048576,bytes.length);return new Response(bytes.subarray(start,end),{status:206,headers:{'X-Media-Version':version,'Content-Range':`bytes ${start}-${end-1}/${bytes.length}`}});}
-function batch(options,thumbnail,original,{pendingThumbnail=false}={}){const {items}=JSON.parse(options.body);return Response.json({results:items.map(item=>{if(item.variant==='thumbnail'&&pendingThumbnail)return {key:item.key,requested_variant:item.variant,status:'pending'};const bytes=item.variant==='thumbnail'?thumbnail:original,version=hash(bytes);return {key:item.key,requested_variant:item.variant,status:'available',size:bytes.length,type:item.variant==='thumbnail'?'image/webp':'image/jpeg',sha256:version,version,variant:item.variant,source_version:version};})});}
-async function setup(){const a=await app({observer:true});Object.defineProperty(a.w.crypto,'subtle',{value:webcrypto.subtle});a.w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};a.login();a.rows.daily_checkins.push({id:'sample',author_id:A,content:'sample',photo_path:'daily/test',created_at:'2026-10-14'});return a;}
-test('the list downloads only a thumbnail, explicit original view is separate, both representations survive a rerender, logout clears the dialog',async()=>{
- const a=await setup(),thumb=Buffer.alloc(25,1),original=Buffer.alloc(1048583,2),requests=[];
+
+test('list and explicit original view fetch whole files separately, with lazy loading and no R2 URL',async()=>{
+ const a=await app({observer:true});
  try{
-  a.w.fetch=async(url,options)=>{requests.push(url);if(String(url)==='/api/photo-meta')return batch(options,thumb,original);const thumbnail=query(url).get('variant')==='thumbnail';return response(url,thumbnail?thumb:original,thumbnail?'thumbnail':'original');};
-  await a.run('restoreSession()');assert.equal(requests.length,0);a.visible([0]);await a.idle();assert.equal(requests.length,2);assert.match(requests[0],/meta=1/);assert.equal(query(requests[1]).get('variant'),'thumbnail');
-  a.w.document.querySelector('[data-view-photo]').click();a.visible([0,1]);await a.idle();assert.equal(requests.length,5);assert.equal((await a.run('photoCache.stats()')).count,2);
-  a.w.document.querySelector('dialog button').click();assert.equal(a.w.document.querySelector('dialog'),null);
-  const before=requests.length;a.rows.daily_checkins[0].content='changed text';await a.run('loadDailyCheckins()');a.visible([0]);await a.idle();assert.equal(requests.length,before);assert.equal((await a.run('photoCache.stats()')).count,2);
-  a.w.document.querySelector('[data-view-photo]').click();a.visible([0,1]);await a.idle();assert.equal(requests.length,before+1); // fresh auth metadata; cached original body
-  await a.run('logout()');assert.equal(a.w.document.querySelector('dialog'),null);assert.equal(a.run('photoJobs.size'),0);
- }finally{await a.close();}
-});
-test('an unavailable thumbnail falls back to the explicitly returned original variant and never sends original hashes to thumbnail ranges',async()=>{
- const a=await setup(),original=Buffer.alloc(1048583,2),parts=[];
- try{
-  a.w.fetch=async(url,options)=>{if(String(url)==='/api/photo-meta')return batch(options,original,original,{pendingThumbnail:true});if(query(url).has('part')){parts.push(url);assert.equal(query(url).get('variant'),null);}return response(url,original,'original');};
-  await a.run('restoreSession()');a.visible([0]);await a.idle();assert.equal(parts.length,2);assert.equal(a.w.document.querySelector('img[data-legacy-id]').getAttribute('src'),'blob:test');
-  a.w.document.querySelector('[data-view-photo]').click();a.visible([0,1]);await a.idle();assert.equal(parts.length,2);assert.equal((await a.run('photoCache.stats()')).count,1);
+  a.login();
+  a.rows.daily_checkins.push({id:'history',author_id:A,photo_path:'old.jpg',photo_key:'previous-r2',content:'day',created_at:'2026-10-13'});
+  a.w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
+  const requests=[];
+  a.w.fetch=async (url,options)=>{
+   const parameters=new URL(url,'https://love.invalid').searchParams;
+   const thumbnail=parameters.get('variant')==='thumbnail';
+   const type=thumbnail?'image/webp':'image/jpeg',bytes=thumbnail?'small':'full original';
+   requests.push({url,parameters,options});
+   return new Response(bytes,{headers:{'Content-Type':type,'Content-Length':String(bytes.length),ETag:'W/"'+(thumbnail?'thumbnail':'original')+'-v1-source"'}});
+  };
+  await a.run('restoreSession()');
+  assert.equal(requests.length,0);
+  a.visible([0]);await a.idle();
+  assert.equal(requests.length,1);
+  assert.equal(requests[0].parameters.get('variant'),'thumbnail');
+  assert.equal(a.w.document.querySelector('.check-card img').src,'blob:test');
+  a.w.document.querySelector('[data-view-photo]').click();
+  a.visible([1]);await a.idle();
+  assert.equal(requests.length,2);
+  assert.equal(requests[1].parameters.get('variant'),null);
+  assert.equal(a.w.document.querySelector('dialog img').src,'blob:test');
+  assert.equal((await a.run('photoCache.stats()')).count,2);
+  for(const {url,parameters,options} of requests){
+   assert.match(url,/^\/api\/photo\?/);
+   assert.equal(parameters.get('source'),'legacy');
+   assert.equal(parameters.get('id'),'history');
+   assert.doesNotMatch(url,/part=|meta=|version=|workers\.dev/);
+   assert.deepEqual(Object.keys(options.headers),[]);
+  }
+  await a.run('logout()');
+  assert.equal(a.w.document.querySelector('dialog'),null);
  }finally{await a.close();}
 });

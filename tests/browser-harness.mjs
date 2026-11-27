@@ -93,7 +93,7 @@ export async function app({missingSdk=false,brokenSdk=false,cacheFactory=new IDB
  return {
   w,dom,rows,queries,run,revoked,
   visible(indices){const images=[...observed];intersection(images.map((target,index)=>({target,isIntersecting:indices.includes(index)})));},
-  async idle(){for(let i=0;i<300;i++){if(run('photoActive===0&&photoQueue.length===0&&photoMetaPending.size===0&&!photoMetaController&&!photoMetaScheduled'))return;await new Promise(resolve=>setTimeout(resolve,5));}throw Error('Photo queue did not settle');},
+  async idle(){for(let i=0;i<300;i++){if(run('[...photoJobs.values()].every(job=>!job.pending)'))return;await new Promise(resolve=>setTimeout(resolve,5));}throw Error('Photo downloads did not settle');},
   reads:()=>reads,sessionChecks:()=>sessionChecks,
   login(id=A){session={access_token:'test',expires_at:Date.now()/1000+3600,user:{id},profile:profile(id)};},
   expire(){session=null;},
